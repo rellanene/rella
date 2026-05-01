@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Stores{% endblock %}
+{% block content %}
+<h1>Stores</h1>
+<form method="post" class="add-form">
+  <input name="name" placeholder="Store name" required>
+  <button type="submit">Add Store</button>
+</form>
+
+<table class="data-table">
+  <thead><tr><th>Name</th><th>Created At</th><th>Created By</th></tr></thead>
+  <tbody>
+    {% for s in stores %}
+    <tr>
+      <td>{{ s.name }}</td>
+      <td>{{ s.created_at }}</td>
+      <td>{{ s.created_by }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

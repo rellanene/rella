@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Stock In{% endblock %}
+{% block content %}
+<h1>Stock In</h1>
+<form method="post" class="add-form">
+  <select name="product_id" required>
+    <option value="">Select product</option>
+    {% for p in products %}
+    <option value="{{ p.id }}">{{ p.name }} ({{ p.barcode }})</option>
+    {% endfor %}
+  </select>
+  <select name="store_id" required>
+    <option value="">Select store</option>
+    {% for s in stores %}
+    <option value="{{ s.id }}">{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <input name="qty" type="number" min="1" placeholder="Quantity" required>
+  <button type="submit">Receive Stock</button>
+</form>
+{% endblock %}

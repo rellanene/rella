@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Register</h1>
+  <form method="post" class="add-form">
+    <input name="username" placeholder="Username" required>
+    <input name="email" type="email" placeholder="Email" required>
+    <input name="business_id" placeholder="Business Name (Business ID)" required>
+    <select name="role">
+      <option value="staff">Staff</option>
+      <option value="admin">Admin</option>
+    </select>
+    <input name="password" type="password" placeholder="Password" required>
+
+    <input name="q1" placeholder="Question 1" required>
+    <input name="a1" placeholder="Answer 1" required>
+    <input name="q2" placeholder="Question 2" required>
+    <input name="a2" placeholder="Answer 2" required>
+    <input name="q3" placeholder="Question 3" required>
+    <input name="a3" placeholder="Answer 3" required>
+
+    <button type="submit">Register</button>
+  </form>
+</div>
+{% endblock %}

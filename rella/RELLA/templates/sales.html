@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Sales{% endblock %}
+{% block content %}
+<h1>Sales</h1>
+
+<div class="card">
+  <form id="sales-form" class="add-form">
+    <select name="client_id" id="client_id" required>
+      <option value="">Select client</option>
+      {% for c in clients %}
+      <option value="{{ c.id }}">{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="store_id" id="store_id" required>
+      <option value="">Select store</option>
+      {% for s in stores %}
+      <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <input id="barcode-input" placeholder="Scan barcode or type product name">
+    <button type="button" id="add-item-btn">Add Item</button>
+  </form>
+
+  <table class="data-table" id="sales-items-table">
+    <thead>
+      <tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p>Total: <span id="sales-total">0.00</span></p>
+  <button type="button" id="submit-sale-btn">Complete Sale</button>
+</div>
+
+<script>
+  const products = {{ products|tojson }};
+</script>
+{% endblock %}

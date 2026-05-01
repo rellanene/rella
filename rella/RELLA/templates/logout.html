@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Logout{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Logged out</h1>
+  <p>You have been logged out.</p>
+  <p><a href="{{ url_for('login') }}">Login again</a></p>
+</div>
+{% endblock %}

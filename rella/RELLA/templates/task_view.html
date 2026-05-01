@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Task {{ task.task_no }}{% endblock %}
+{% block content %}
+
+<h1>Task {{ task.task_no }}</h1>
+
+<div class="card">
+  <h3>{{ task.title }}</h3>
+  <p>{{ task.description }}</p>
+  <p><strong>Status:</strong> {{ task.status }}</p>
+  <p><strong>Assigned to:</strong> {{ task.assigned_name }}</p>
+</div>
+
+<!-- Update Status -->
+<div class="card">
+  <h3>Update Status</h3>
+  <form method="post" action="{{ url_for('task_update_status', task_id=task.id) }}">
+    <select name="status" required>
+      <option value="open">Open</option>
+      <option value="in_progress">In Progress</option>
+      <option value="completed">Completed</option>
+      <option value="archived">Archived</option>
+    </select>
+    <button class="btn-primary">Update</button>
+  </form>
+</div>
+
+<!-- Transfer Task -->
+<div class="card">
+  <h3>Transfer Task</h3>
+  <form method="post" action="{{ url_for('task_transfer', task_id=task.id) }}">
+    <select name="assigned_to" required>
+      {% for u in users %}
+      <option value="{{ u.id }}">{{ u.username }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn-accent">Transfer</button>
+  </form>
+</div>
+
+<!-- Add Comment -->
+<div class="card">
+  <h3>Comments</h3>
+  <form method="post" action="{{ url_for('task_add_comment', task_id=task.id) }}">
+    <textarea name="comment" placeholder="Write a comment..." required></textarea>
+    <button class="btn-primary">Add Comment</button>
+  </form>
+
+  <ul>
+    {% for c in comments %}
+    <li><strong>{{ c.username }}</strong>: {{ c.comment }} <em>{{ c.created_at }}</em></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<!-- File Upload -->
+<div class="card">
+  <h3>Attachments</h3>
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('task_upload', task_id=task.id) }}">
+    <input type="file" name="file" required>
+    <button class="btn-primary">Upload</button>
+  </form>
+
+  <ul>
+    {% for f in files %}
+    <li><a href="/{{ f.file_path }}" download>{{ f.file_name }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<!-- History -->
+<div class="card">
+  <h3>History</h3>
+  <ul>
+    {% for h in history %}
+    <li><strong>{{ h.username }}</strong> — {{ h.action }} — {{ h.details }} — {{ h.created_at }}</li>
+    {% endfor %}
+  </ul>
+</div>
+
+{% endblock %}

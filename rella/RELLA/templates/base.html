@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>RELLA - {% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='rella.css') }}">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+  <header class="navbar">
+    <div class="brand">RELLA</div>
+    <nav class="nav">
+      <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.path=='/' or request.path.startswith('/dashboard') %}active{% endif %}">Dashboard</a>
+      <a href="{{ url_for('products') }}" class="nav-link {% if request.path.startswith('/products') %}active{% endif %}">Products</a>
+      <a href="{{ url_for('clients') }}" class="nav-link {% if request.path.startswith('/clients') %}active{% endif %}">Clients</a>
+      <a href="{{ url_for('sales') }}" class="nav-link {% if request.path.startswith('/sales') %}active{% endif %}">Sales</a>
+      <a href="{{ url_for('pos') }}" class="nav-link {% if request.path.startswith('/pos') %}active{% endif %}">POS</a>
+      <a href="{{ url_for('records') }}" class="nav-link {% if request.path.startswith('/records') %}active{% endif %}">Records</a>
+      <a href="{{ url_for('stores') }}" class="nav-link {% if request.path.startswith('/stores') %}active{% endif %}">Stores</a>
+      <a href="{{ url_for('stock_in') }}" class="nav-link {% if request.path.startswith('/stock-in') %}active{% endif %}">Stock In</a>
+      <a href="{{ url_for('transfer') }}" class="nav-link {% if request.path.startswith('/transfer') %}active{% endif %}">Transfer</a>
+      <a href="{{ url_for('movements') }}" class="nav-link {% if request.path.startswith('/movements') %}active{% endif %}">Movements</a>
+      <a href="{{ url_for('human') }}" class="nav-link {% if request.path.startswith('/human') %}active{% endif %}">Human</a>
+      <a href="{{ url_for('comms') }}" class="nav-link {% if request.path.startswith('/comms') %}active{% endif %}">Comms</a>
+      <a href="{{ url_for('finances') }}" class="nav-link {% if request.path.startswith('/finances') %}active{% endif %}">Finances</a>
+      <a href="{{ url_for('tasks') }}" class="nav-link {% if request.path.startswith('/tasks') %}active{% endif %}">Tasks</a>
+      <a href="{{ url_for('permissions_page') }}" class="nav-link {% if request.path.startswith('/permissions') %}active{% endif %}">Permissions</a>
+      <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <script>
+          window.__RELLA_TOASTS = window.__RELLA_TOASTS || [];
+          {% for cat, msg in messages %}
+            window.__RELLA_TOASTS.push({category: "{{ cat }}", message: "{{ msg|escape }}"}); 
+          {% endfor %}
+        </script>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toast-container" class="toast-container"></div>
+  <script src="{{ url_for('static', filename='rella.js') }}"></script>
+</body>
+</html>

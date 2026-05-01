@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Transfer{% endblock %}
+{% block content %}
+<h1>Transfer</h1>
+<form method="post" class="add-form">
+  <select name="product_id" required>
+    <option value="">Select product</option>
+    {% for p in products %}
+    <option value="{{ p.id }}">{{ p.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="from_store" required>
+    <option value="">From store</option>
+    {% for s in stores %}
+    <option value="{{ s.id }}">{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="to_store" required>
+    <option value="">To store</option>
+    {% for s in stores %}
+    <option value="{{ s.id }}">{{ s.name }}</option>
+    {% endfor %}
+  </select>
+  <input name="qty" type="number" min="1" placeholder="Quantity" required>
+  <button type="submit">Transfer</button>
+</form>
+{% endblock %}

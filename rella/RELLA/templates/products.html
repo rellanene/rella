@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block content %}
+
+<h1>Products</h1>
+
+<!-- Search -->
+<form method="get" class="search-form">
+  <input name="q" placeholder="Search product by name or barcode" value="{{ request.args.get('q','') }}">
+  <button type="submit">Search</button>
+</form>
+
+<!-- Add Product -->
+{% if has_permission(user.id, 'products.manage') %}
+<form method="post" class="add-form">
+  <h3>Add Product</h3>
+  <input name="barcode" placeholder="Barcode" required>
+  <input name="name" placeholder="Product name" required>
+  <input name="wholesale" placeholder="Wholesale price" required>
+  <input name="retail" placeholder="Retail price" required>
+  <button type="submit">Add</button>
+</form>
+{% endif %}
+
+<!-- Product List -->
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Barcode</th>
+      <th>Name</th>
+      <th>Wholesale</th>
+      <th>Retail</th>
+      <th>Total Qty</th>
+      <th>Created At</th>
+      <th>Added By</th>
+      {% if has_permission(user.id, 'products.manage') %}
+      <th>Actions</th>
+      {% endif %}
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for p in products %}
+    <tr>
+      <td>{{ p.barcode }}</td>
+      <td>{{ p.name }}</td>
+      <td>{{ p.wholesale_price }}</td>
+      <td>{{ p.retail_price }}</td>
+      <td>{{ p.total_qty or 0 }}</td>
+      <td>{{ p.created_at }}</td>
+      <td>{{ p.created_by }}</td>
+
+      {% if has_permission(user.id, 'products.manage') %}
+      <td>
+        <!-- Edit Button -->
+        <button class="btn-edit-product" 
+                data-id="{{ p.id }}"
+                data-name="{{ p.name }}"
+                data-wholesale="{{ p.wholesale_price }}"
+                data-retail="{{ p.retail_price }}">
+          Edit
+        </button>
+
+        <!-- Delete -->
+        <form method="post" action="{{ url_for('delete_product', pid=p.id) }}" style="display:inline">
+          <button type="submit" class="btn-delete">Delete</button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Edit Product</h3>
+    <form method="post" id="editForm">
+      <input type="text" name="name" id="editName" placeholder="Product name" required>
+      <input type="text" name="wholesale" id="editWholesale" placeholder="Wholesale price" required>
+      <input type="text" name="retail" id="editRetail" placeholder="Retail price" required>
+      <button type="submit">Save</button>
+      <button type="button" id="closeModal">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.btn-edit-product').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.id;
+    document.getElementById('editName').value = btn.dataset.name;
+    document.getElementById('editWholesale').value = btn.dataset.wholesale;
+    document.getElementById('editRetail').value = btn.dataset.retail;
+
+    document.getElementById('editForm').action = "/products/edit/" + id;
+    document.getElementById('editModal').classList.remove('hidden');
+  });
+});
+
+document.getElementById('closeModal').addEventListener('click', () => {
+  document.getElementById('editModal').classList.add('hidden');
+});
+</script>
+
+{% endblock %}

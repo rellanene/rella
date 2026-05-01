@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Records{% endblock %}
+{% block content %}
+<h1>Records</h1>
+<form method="get" class="search-form">
+  <input name="q" placeholder="Search by invoice number" value="{{ request.args.get('q','') }}">
+  <input name="start" type="date" value="{{ request.args.get('start','') }}">
+  <input name="end" type="date" value="{{ request.args.get('end','') }}">
+  <button type="submit">Filter</button>
+  <a href="{{ url_for('export_records_csv', q=request.args.get('q',''), start=request.args.get('start',''), end=request.args.get('end','')) }}">Export CSV</a>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr><th>Invoice</th><th>Client</th><th>Total</th><th>Date & Time</th><th>User</th><th>Invoice</th></tr>
+  </thead>
+  <tbody>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.invoice_no }}</td>
+      <td>{{ r.client_name }}</td>
+      <td>{{ r.total }}</td>
+      <td>{{ r.created_at }}</td>
+      <td>{{ r.user_name }}</td>
+      <td><a href="{{ url_for('invoice_view', sale_id=r.id) }}">View</a> | <a href="{{ url_for('invoice_pdf', sale_id=r.id) }}">PDF</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="card">
+  <h3>Visuals</h3>
+  <p>Placeholder for charts of sales.</p>
+</div>
+{% endblock %}

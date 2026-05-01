@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="card">
+  <p>Total products: {{ total_products }}</p>
+  <p>Total clients: {{ total_clients }}</p>
+  <p>Total sales: {{ total_sales }}</p>
+</div>
+<div class="card">
+  <h3>Charts</h3>
+  <p>Placeholder for charts (integrate Chart.js here).</p>
+</div>
+{% endblock %}

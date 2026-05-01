@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Tasks{% endblock %}
+{% block content %}
+<h1>Tasks</h1>
+<form method="get" class="search-form">
+  <input name="q" placeholder="Search by task number or title" value="{{ request.args.get('q','') }}">
+  <button type="submit">Search</button>
+</form>
+
+<form method="post" class="add-form">
+  <input name="title" placeholder="Task title" required>
+  <input name="description" placeholder="Description">
+  <select name="assigned_to" required>
+      <option value="">Assign to</option>
+      {% for u in users %}
+          <option value="{{ u.id }}">{{ u.username }}</option>
+      {% endfor %}
+  </select>
+  <button type="submit">Create Task</button>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Task No</th>
+      <th>Title</th>
+      <th>Assigned To</th>
+      <th>Status</th>
+      <th>Created At</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for t in tasks %}
+    <tr>
+		<td>
+		  <a href="{{ url_for('task_view', task_id=t.id) }}" 
+		     class="btn-task-open btn-accent-outline btn-small">
+		     Open Task
+		  </a>
+		</td>
+      <td>{{ t.title }}</td>
+      <td>{{ t.assigned_name }}</td>
+      <td>{{ t.status }}</td>
+      <td>{{ t.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

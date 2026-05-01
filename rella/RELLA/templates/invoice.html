@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ sale.invoice_no }}{% endblock %}
+{% block content %}
+<h1>Invoice {{ sale.invoice_no }}</h1>
+<div class="card">
+  <p><strong>Client:</strong> {{ sale.client_name }} ({{ sale.client_email }})</p>
+  <p><strong>Date:</strong> {{ sale.created_at }}</p>
+  <p><strong>Total:</strong> {{ sale.total }}</p>
+</div>
+
+<table class="data-table">
+  <thead>
+    <tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+  </thead>
+  <tbody>
+    {% for i in items %}
+    <tr>
+      <td>{{ i.product_name }}</td>
+      <td>{{ i.quantity }}</td>
+      <td>{{ i.unit_price }}</td>
+      <td>{{ i.total_price }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Clients{% endblock %}
+{% block content %}
+<h1>Clients</h1>
+<form method="get" class="search-form">
+  <input name="q" placeholder="Search client by name, email or phone" value="{{ request.args.get('q','') }}">
+  <button type="submit">Search</button>
+</form>
+
+<form method="post" class="add-form">
+  <h3>Add Client</h3>
+  <input name="name" placeholder="Name" required>
+  <input name="email" type="email" placeholder="Email">
+  <input name="phone" placeholder="Phone">
+  <button type="submit">Add</button>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr><th>Name</th><th>Email</th><th>Phone</th><th>Created At</th><th>Added By</th></tr>
+  </thead>
+  <tbody>
+    {% for c in clients %}
+    <tr>
+      <td>{{ c.name }}</td>
+      <td>{{ c.email }}</td>
+      <td>{{ c.phone }}</td>
+      <td>{{ c.created_at }}</td>
+      <td>{{ c.created_by }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
