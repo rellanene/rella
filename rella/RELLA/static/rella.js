@@ -1,30 +1,24 @@
-// static/rella.js
-document.addEventListener('DOMContentLoaded', function(){
-  const container = document.getElementById('toast-container');
+@app.route('/tasks/update-status', methods=['POST'])
+@require_login
+def task_update_status_api():
+    user = current_user()
+    data = request.get_json(force=True)
 
-  function showToast(message, category='info', timeout=5000){
-    const t = document.createElement('div');
-    t.className = 'toast ' + (category || 'info');
-    t.innerText = message;
-    container.appendChild(t);
-    // ensure toasts don't overlap content: container is bottom-left and main has bottom padding
-    setTimeout(()=> {
-      t.style.opacity = '0';
-      t.style.transform = 'translateX(-10px)';
-      setTimeout(()=> t.remove(), 400);
-    }, timeout);
-  }
+    task_id = data.get('task_id')
+    new_status = data.get('status')
 
-  // show server-side flashed messages
-  if (window.__RELLA_TOASTS && Array.isArray(window.__RELLA_TOASTS)){
-    window.__RELLA_TOASTS.forEach(function(item, idx){
-      showToast(item.message, item.category === 'error' ? 'error' : (item.category === 'success' ? 'success' : 'info'), 5000 + idx*300);
-    });
-    window.__RELLA_TOASTS = [];
-  }
+    if not task_id or not new_status:
+        return jsonify({'success': False, 'error': 'Missing data'})
 
-  // expose for other scripts
-  window.RELLA = {
-    toast: showToast
-  };
-});
+    execute("""
+        UPDATE tasks 
+        SET status=%s, updated_by=%s 
+        WHERE id=%s
+    """, (new_status, user['id'], task_id))
+
+    execute("""
+        INSERT INTO task_history (task_id, user_id, action, details)
+        VALUES (%s,%s,'kanban_status_change',%s)
+    """, (task_id, user['id'], f"Moved to {new_status}"))
+
+    return jsonify({'success': True})

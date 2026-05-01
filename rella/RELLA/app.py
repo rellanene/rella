@@ -388,6 +388,56 @@ def edit_product(pid):
     return redirect(url_for('products'))
 
 
+
+#Add Kanban Route + Status Update
+@app.route('/tasks/board')
+@require_login
+def task_board():
+    user = current_user()
+
+    tasks = query_all("""
+        SELECT t.*, u.username AS assigned_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to = u.id
+        ORDER BY t.created_at DESC
+    """)
+
+    return render_template('task_board.html', tasks=tasks, user=user)
+
+#AJAX endpoint for drag‑and‑drop status updates
+@app.route('/tasks/update-status', methods=['POST'])
+@require_login
+def task_update_status_api():
+    try:
+        data = request.get_json(force=True)
+
+        task_id = int(data.get('task_id'))
+        new_status = data.get('status')
+
+        allowed = ['open','in_progress','completed','archived']
+
+        if new_status not in allowed:
+            return jsonify({'success': False}), 400
+
+        db = get_db()
+        cursor = db.cursor()
+
+        cursor.execute(
+            "UPDATE tasks SET status=%s WHERE id=%s",
+            (new_status, task_id)
+        )
+
+        db.commit()
+        cursor.close()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print("ERROR:", e)
+        return jsonify({'success': False}), 500
+
+
+
 @app.route('/products/delete/<int:pid>', methods=['POST'])
 @require_login
 def delete_product(pid):
@@ -583,12 +633,14 @@ def tasks():
         title = request.form.get('title')
         desc = request.form.get('description')
         assigned_to = request.form.get('assigned_to')
+        priority = request.form.get('priority', 'medium')   # FIXED
+        status = 'open'                                     # FIXED
         task_no = generate_task_no()
 
         execute("""
-            INSERT INTO tasks (task_no,title,description,assigned_to,created_by)
-            VALUES (%s,%s,%s,%s,%s)
-        """, (task_no, title, desc, assigned_to, user['id']))
+            INSERT INTO tasks (task_no, title, description, assigned_to, priority, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (task_no, title, desc, assigned_to, priority, status))
 
         log_action(user['id'], 'create_task', f'Created task {task_no}')
         flash('Task created', 'success')
@@ -608,6 +660,10 @@ def tasks():
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
         """)
+
+    return render_template("tasks.html", users=users, tasks=rows)
+
+
 
     return render_template('tasks.html', tasks=rows, users=users, user=user)
 @app.route('/tasks/<int:task_id>')

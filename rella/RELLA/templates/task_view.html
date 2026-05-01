@@ -4,6 +4,15 @@
 
 <h1>Task {{ task.task_no }}</h1>
 
+<!-- Back to Task List Button (curved, matching theme) -->
+<div style="margin-bottom: 20px;">
+  <a href="{{ url_for('tasks') }}" 
+     class="btn-accent btn-small"
+     style="text-decoration:none; display:inline-block; border-radius: var(--radius);">
+     Back to Task List
+  </a>
+</div>
+
 <div class="card">
   <h3>{{ task.title }}</h3>
   <p>{{ task.description }}</p>

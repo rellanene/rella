@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Task Board{% endblock %}
+{% block content %}
+
+<h1>Task Board</h1>
+
+<div style="margin-bottom: 20px;">
+  <a href="{{ url_for('tasks') }}" 
+     class="btn-accent btn-small" 
+     style="text-decoration:none; display:inline-block;">
+     Back to Task List
+  </a>
+</div>
+
+<div class="kanban-container">
+
+  <!-- OPEN -->
+  <div class="kanban-column" data-status="open">
+    <h3 class="kanban-title">Open</h3>
+    <div class="kanban-list" id="open">
+      {% for t in tasks if t.status == 'open' %}
+      <div class="kanban-card priority-{{ t.priority }}" draggable="true" data-id="{{ t.id }}">
+        <strong>{{ t.task_no }}</strong><br>
+        {{ t.title }}<br>
+        <small>{{ t.assigned_name }}</small><br>
+
+        <span class="priority-badge priority-{{ t.priority }}">
+          {{ t.priority|capitalize }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- IN PROGRESS -->
+  <div class="kanban-column" data-status="in_progress">
+    <h3 class="kanban-title">In Progress</h3>
+    <div class="kanban-list" id="in_progress">
+      {% for t in tasks if t.status == 'in_progress' %}
+      <div class="kanban-card priority-{{ t.priority }}" draggable="true" data-id="{{ t.id }}">
+        <strong>{{ t.task_no }}</strong><br>
+        {{ t.title }}<br>
+        <small>{{ t.assigned_name }}</small><br>
+
+        <span class="priority-badge priority-{{ t.priority }}">
+          {{ t.priority|capitalize }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- COMPLETED -->
+  <div class="kanban-column" data-status="completed">
+    <h3 class="kanban-title">Completed</h3>
+    <div class="kanban-list" id="completed">
+      {% for t in tasks if t.status == 'completed' %}
+      <div class="kanban-card priority-{{ t.priority }}" draggable="true" data-id="{{ t.id }}">
+        <strong>{{ t.task_no }}</strong><br>
+        {{ t.title }}<br>
+        <small>{{ t.assigned_name }}</small><br>
+
+        <span class="priority-badge priority-{{ t.priority }}">
+          {{ t.priority|capitalize }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ARCHIVED -->
+  <div class="kanban-column" data-status="archived">
+    <h3 class="kanban-title">Archived</h3>
+    <div class="kanban-list" id="archived">
+      {% for t in tasks if t.status == 'archived' %}
+      <div class="kanban-card priority-{{ t.priority }}" draggable="true" data-id="{{ t.id }}">
+        <strong>{{ t.task_no }}</strong><br>
+        {{ t.title }}<br>
+        <small>{{ t.assigned_name }}</small><br>
+
+        <span class="priority-badge priority-{{ t.priority }}">
+          {{ t.priority|capitalize }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+let draggedCard = null;
+
+document.querySelectorAll('.kanban-card').forEach(card => {
+  card.addEventListener('dragstart', () => {
+    draggedCard = card;
+    card.classList.add('dragging');
+  });
+
+  card.addEventListener('dragend', () => {
+    draggedCard.classList.remove('dragging');
+    draggedCard = null;
+  });
+});
+
+document.querySelectorAll('.kanban-list').forEach(list => {
+  list.addEventListener('dragover', e => e.preventDefault());
+
+  list.addEventListener('drop', e => {
+    if (!draggedCard) return;
+
+    list.appendChild(draggedCard);
+
+    const taskId = draggedCard.dataset.id;
+    const newStatus = list.id;
+
+    fetch('/tasks/update-status', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({task_id: taskId, status: newStatus})
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        window.RELLA.toast("Task moved to " + newStatus, "success");
+      }
+    });
+  });
+});
+</script>
+
+{% endblock %}
