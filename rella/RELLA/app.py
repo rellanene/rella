@@ -791,6 +791,267 @@ def my_tasks():
 
     return render_template("tasks.html", users=users, tasks=rows)
 
+#--------Comms main page
+import os
+from werkzeug.utils import secure_filename
+
+UPLOAD_EMAIL = "static/uploads/email/"
+UPLOAD_CHAT = "static/uploads/chat/"
+
+def save_attachment(file, folder):
+    if not file or file.filename == "":
+        return None
+    filename = secure_filename(file.filename)
+    path = os.path.join(folder, filename)
+    file.save(path)
+    return path
+
+def execute_returning_id(sql, params=None):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(sql, params or ())
+    db.commit()
+    last_id = cursor.lastrowid
+    cursor.close()
+    return last_id
+
+
+
+
+
+
+#Send email
+
+
+#View thread + reply
+@app.route('/comms/email/thread/<int:thread_id>')
+@require_login
+def comms_email_thread(thread_id):
+    user = current_user()
+
+    messages = query_all("""
+        SELECT em.*, u.username AS sender_name
+        FROM email_messages em
+        JOIN users u ON em.sender_id = u.id
+        WHERE em.thread_id = %s
+        ORDER BY em.created_at ASC
+    """, (thread_id,))
+
+    execute("""
+        UPDATE email_recipients er
+        JOIN email_messages em ON er.message_id = em.id
+        SET er.is_read = 1
+        WHERE er.user_id = %s AND em.thread_id = %s
+    """, (user['id'], thread_id))
+
+    subject = query_one("SELECT subject FROM email_threads WHERE id=%s", (thread_id,))
+
+    return render_template("comms_thread.html", messages=messages, subject=subject['subject'], thread_id=thread_id)
+
+
+
+
+
+#Chat: load messages + send message (AJAX)
+@app.route('/comms/chat/<int:room_id>/messages')
+@require_login
+def comms_chat_messages(room_id):
+    msgs = query_all("""
+        SELECT m.*, u.username AS sender_name
+        FROM chat_messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.room_id = %s
+        ORDER BY m.created_at ASC
+    """, (room_id,))
+    return jsonify(msgs)
+
+
+
+@app.route('/comms/chat/<int:room_id>/send', methods=['POST'])
+@require_login
+def comms_chat_send(room_id):
+    user = current_user()
+    file = request.files.get('attachment')
+    data = request.form or request.get_json()
+
+    text = data.get('message', '').strip()
+    attachment_path = save_attachment(file, UPLOAD_CHAT)
+
+    execute("""
+        INSERT INTO chat_messages (room_id, sender_id, message, attachment_path)
+        VALUES (%s, %s, %s, %s)
+    """, (room_id, user['id'], text, attachment_path))
+
+    return jsonify({'success': True})
+@app.context_processor
+def inject_user():
+    try:
+        return {'current_user': current_user()}
+    except:
+        return {'current_user': None}
+    
+@app.route('/comms/email/reply/<int:thread_id>', methods=['POST'])
+@require_login
+def comms_email_reply(thread_id):
+    user = current_user()
+    body = request.form.get('body')
+    file = request.files.get('attachment')
+
+    attachment_path = save_attachment(file, UPLOAD_EMAIL)
+
+    message_id = execute_returning_id("""
+        INSERT INTO email_messages (thread_id, sender_id, body, attachment_path)
+        VALUES (%s, %s, %s, %s)
+    """, (thread_id, user['id'], body, attachment_path))
+
+    # Add to sender's sent folder
+    execute("""
+        INSERT INTO email_recipients (message_id, user_id, folder, is_read)
+        VALUES (%s, %s, 'sent', 1)
+    """, (message_id, user['id']))
+
+    # Add to all recipients in the thread
+    recipients = query_all("""
+        SELECT DISTINCT er.user_id
+        FROM email_recipients er
+        JOIN email_messages em ON er.message_id = em.id
+        WHERE em.thread_id = %s AND er.user_id != %s
+    """, (thread_id, user['id']))
+
+    for r in recipients:
+        execute("""
+            INSERT INTO email_recipients (message_id, user_id, folder, is_read)
+            VALUES (%s, %s, 'inbox', 0)
+        """, (message_id, r['user_id']))
+
+    return redirect(f"/comms/email/thread/{thread_id}")
+
+
+
+
+import os
+from werkzeug.utils import secure_filename
+
+UPLOAD_EMAIL = "static/uploads/email/"
+UPLOAD_CHAT = "static/uploads/chat/"
+
+def save_attachment(file, folder):
+    if not file or file.filename == "":
+        return None
+    filename = secure_filename(file.filename)
+    path = os.path.join(folder, filename)
+    file.save(path)
+    return path
+
+
+
+@app.route('/comms/email/send', methods=['POST'])
+@require_login
+def comms_email_send():
+    user = current_user()
+    subject = request.form.get('subject')
+    body = request.form.get('body')
+    to_ids = request.form.getlist('to')
+    file = request.files.get('attachment')
+
+    attachment_path = save_attachment(file, UPLOAD_EMAIL)
+
+    thread_id = execute_returning_id("""
+        INSERT INTO email_threads (subject) VALUES (%s)
+    """, (subject,))
+
+    message_id = execute_returning_id("""
+        INSERT INTO email_messages (thread_id, sender_id, body, attachment_path)
+        VALUES (%s, %s, %s, %s)
+    """, (thread_id, user['id'], body, attachment_path))
+
+    execute("""
+        INSERT INTO email_recipients (message_id, user_id, folder, is_read)
+        VALUES (%s, %s, 'sent', 1)
+    """, (message_id, user['id']))
+
+    for uid in to_ids:
+        execute("""
+            INSERT INTO email_recipients (message_id, user_id, folder, is_read)
+            VALUES (%s, %s, 'inbox', 0)
+        """, (message_id, uid))
+
+    flash("Email sent", "success")
+    return redirect(url_for('comms_page'))
+
+
+@app.route('/comms')
+@require_login
+def comms_page():
+    user = current_user()
+
+    inbox = query_all("""
+        SELECT em.id AS message_id, et.id AS thread_id, et.subject,
+               em.body, em.attachment_path, em.created_at,
+               u.username AS sender_name, er.is_read
+        FROM email_recipients er
+        JOIN email_messages em ON er.message_id = em.id
+        JOIN email_threads et ON em.thread_id = et.id
+        JOIN users u ON em.sender_id = u.id
+        WHERE er.user_id = %s AND er.folder = 'inbox'
+        ORDER BY em.created_at DESC
+    """, (user['id'],))
+
+    sent = query_all("""
+        SELECT em.id AS message_id, et.id AS thread_id, et.subject,
+               em.body, em.attachment_path, em.created_at
+        FROM email_messages em
+        JOIN email_threads et ON em.thread_id = et.id
+        WHERE em.sender_id = %s
+        ORDER BY em.created_at DESC
+    """, (user['id'],))
+
+    users = query_all("SELECT id, username FROM users WHERE is_active=1 AND is_approved=1")
+
+    rooms = query_all("""
+        SELECT r.id, r.name, r.is_direct
+        FROM chat_rooms r
+        JOIN chat_room_members m ON r.id = m.room_id
+        WHERE m.user_id = %s
+        ORDER BY r.name
+    """, (user['id'],))
+
+    return render_template("comms.html", inbox=inbox, sent=sent, users=users, rooms=rooms)
+
+
+
+
+
+
+
+
+
+
+@app.route('/comms/search')
+@require_login
+def comms_search():
+    q = "%" + request.args.get("q", "") + "%"
+
+    email_results = query_all("""
+        SELECT et.subject, em.body, em.attachment_path, em.created_at
+        FROM email_messages em
+        JOIN email_threads et ON em.thread_id = et.id
+        WHERE em.body LIKE %s OR et.subject LIKE %s
+        ORDER BY em.created_at DESC
+    """, (q, q))
+
+    chat_results = query_all("""
+        SELECT m.message, m.attachment_path, m.created_at, u.username
+        FROM chat_messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.message LIKE %s
+        ORDER BY m.created_at DESC
+    """, (q,))
+
+    return render_template("comms_search.html", email=email_results, chat=chat_results)
+
+
+
 
 
 import os

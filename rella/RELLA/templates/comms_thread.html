@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Email Thread{% endblock %}
+{% block content %}
+
+<style>
+.thread-container {
+    background:#fff;
+    padding:20px;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    height: calc(100vh - 180px);
+    overflow-y:auto;
+}
+
+.email-msg {
+    padding-bottom:20px;
+    margin-bottom:20px;
+    border-bottom:1px solid #eee;
+}
+
+.email-header {
+    font-weight:700;
+    margin-bottom:5px;
+}
+
+.email-body {
+    margin-top:10px;
+    white-space:pre-wrap;
+}
+
+.email-attachment {
+    margin-top:10px;
+    padding:8px;
+    background:#fafafa;
+    border-radius:var(--radius);
+    border:1px solid #ddd;
+    display:inline-block;
+}
+
+.reply-box {
+    margin-top:20px;
+    background:#fff;
+    padding:20px;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+}
+</style>
+
+<div class="thread-container">
+
+    <h2 style="margin-bottom:20px;">{{ subject }}</h2>
+
+    <!-- EMAIL MESSAGES -->
+    {% for m in messages %}
+    <div class="email-msg">
+
+        <div class="email-header">
+            {{ m.sender_name }} — {{ m.created_at }}
+        </div>
+
+        <div class="email-body">
+            {{ m.body }}
+        </div>
+
+        {% if m.attachment_path %}
+        <div class="email-attachment">
+            📎 <a href="/{{ m.attachment_path }}" target="_blank">Download attachment</a>
+        </div>
+        {% endif %}
+
+    </div>
+    {% endfor %}
+
+    <!-- REPLY BOX -->
+    <div class="reply-box">
+        <h3>Reply</h3>
+
+        <form method="post" action="/comms/email/reply/{{ thread_id }}" enctype="multipart/form-data">
+
+            <label>Message</label>
+            <textarea name="body" rows="5" required style="width:100%;"></textarea>
+
+            <label style="margin-top:10px;">Attachment</label>
+            <input type="file" name="attachment">
+
+            <button class="btn-primary btn-small" style="margin-top:10px;">Send Reply</button>
+        </form>
+    </div>
+
+</div>
+
+{% endblock %}

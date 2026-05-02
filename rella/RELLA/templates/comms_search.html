@@ -1,0 +1,71 @@
+<div style="
+    background:#fff;
+    padding:15px;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    max-height:350px;
+    overflow-y:auto;
+">
+
+    {% if email or chat %}
+        <h4 style="margin-bottom:10px; color:#000;">Search Results</h4>
+
+        <!-- EMAIL RESULTS -->
+        {% if email %}
+            <div style="margin-bottom:15px;">
+                <div style="font-weight:700; margin-bottom:6px; color:#000;">Email</div>
+
+                <ul style="list-style:none; padding:0; margin:0;">
+                    {% for e in email %}
+                    <li style="padding:10px 0; border-bottom:1px solid #eee; cursor:pointer;"
+                        onclick="openThread({{ e.thread_id }})">
+                        
+                        <div style="font-weight:600; color:#000;">
+                            {{ e.subject }}
+                        </div>
+
+                        <div style="font-size:0.9em; color:#555;">
+                            {{ e.body[:80] }}...
+                        </div>
+
+                        <div style="font-size:0.8em; color:#999; margin-top:4px;">
+                            {{ e.created_at }}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <!-- CHAT RESULTS -->
+        {% if chat %}
+            <div>
+                <div style="font-weight:700; margin-bottom:6px; color:#000;">Chat</div>
+
+                <ul style="list-style:none; padding:0; margin:0;">
+                    {% for c in chat %}
+                    <li style="padding:10px 0; border-bottom:1px solid #eee; cursor:pointer;"
+                        onclick="selectRoom({{ c.room_id }}, '{{ c.username }}')">
+
+                        <div style="font-weight:600; color:#000;">
+                            {{ c.username }}
+                        </div>
+
+                        <div style="font-size:0.9em; color:#555;">
+                            {{ c.message[:80] }}...
+                        </div>
+
+                        <div style="font-size:0.8em; color:#999; margin-top:4px;">
+                            {{ c.created_at }}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+    {% else %}
+        <p style="color:#555;">No results found.</p>
+    {% endif %}
+
+</div>
