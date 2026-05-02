@@ -633,8 +633,8 @@ def tasks():
         title = request.form.get('title')
         desc = request.form.get('description')
         assigned_to = request.form.get('assigned_to')
-        priority = request.form.get('priority', 'medium')   # FIXED
-        status = 'open'                                     # FIXED
+        priority = request.form.get('priority', 'medium')
+        status = 'open'
         task_no = generate_task_no()
 
         execute("""
@@ -646,6 +646,7 @@ def tasks():
         flash('Task created', 'success')
         return redirect(url_for('tasks'))
 
+    # SEARCH MODE
     q = request.args.get('q','')
     if q:
         rows = query_all("""
@@ -653,15 +654,19 @@ def tasks():
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
             WHERE t.task_no LIKE %s OR t.title LIKE %s
+            ORDER BY t.id DESC
         """, (f'%{q}%', f'%{q}%'))
     else:
+        # NORMAL MODE — NEWEST FIRST
         rows = query_all("""
             SELECT t.*, u.username as assigned_name
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
+            ORDER BY t.id DESC
         """)
 
     return render_template("tasks.html", users=users, tasks=rows)
+
 
 
 
@@ -714,8 +719,11 @@ def task_update_status(task_id):
     user = current_user()
     status = request.form.get('status')
 
-    execute("UPDATE tasks SET status=%s, updated_by=%s WHERE id=%s",
-            (status, user['id'], task_id))
+    execute("""
+        UPDATE tasks 
+        SET status=%s 
+        WHERE id=%s
+    """, (status, task_id))
 
     execute("""
         INSERT INTO task_history (task_id, user_id, action, details)
@@ -724,6 +732,7 @@ def task_update_status(task_id):
 
     flash('Task status updated', 'success')
     return redirect(url_for('task_view', task_id=task_id))
+
 
 @app.route('/tasks/<int:task_id>/comment', methods=['POST'])
 @require_login
@@ -750,8 +759,11 @@ def task_transfer(task_id):
     user = current_user()
     new_user = request.form.get('assigned_to')
 
-    execute("UPDATE tasks SET assigned_to=%s, updated_by=%s WHERE id=%s",
-            (new_user, user['id'], task_id))
+    execute("""
+        UPDATE tasks 
+        SET assigned_to=%s 
+        WHERE id=%s
+    """, (new_user, task_id))
 
     execute("""
         INSERT INTO task_history (task_id, user_id, action, details)
@@ -760,6 +772,25 @@ def task_transfer(task_id):
 
     flash('Task transferred', 'success')
     return redirect(url_for('task_view', task_id=task_id))
+
+#My Tasks
+@app.route('/my-tasks')
+@require_login
+def my_tasks():
+    user = current_user()
+
+    rows = query_all("""
+        SELECT t.*, u.username AS assigned_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to = u.id
+        WHERE t.assigned_to = %s
+        ORDER BY t.id DESC
+    """, (user['id'],))
+
+    users = query_all("SELECT id, username FROM users WHERE is_active=1 AND is_approved=1")
+
+    return render_template("tasks.html", users=users, tasks=rows)
+
 
 
 import os

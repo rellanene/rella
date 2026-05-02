@@ -5,13 +5,22 @@
 <h1>Tasks</h1>
 
 <!-- Open Task Board button (same style as Create Task) -->
-<div style="margin-bottom: 20px;">
+<div style="margin-bottom: 20px; display:flex; gap:10px;">
+  
   <a href="{{ url_for('task_board') }}" 
-     class="btn-accent btn-small" 
-     style="text-decoration:none; display:inline-block;">
+     class="btn-accent btn-small"
+     style="display:inline-block; font-weight:700; border-radius:var(--radius);">
      Open Task Board
   </a>
+
+  <a href="{{ url_for('my_tasks') }}" 
+     class="btn-accent btn-small"
+     style="display:inline-block; font-weight:700; border-radius:var(--radius);">
+     My Tasks
+  </a>
+
 </div>
+
 
 <!-- Search Form -->
 <form method="get" class="search-form">
