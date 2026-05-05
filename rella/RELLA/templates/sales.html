@@ -4,35 +4,273 @@
 <h1>Sales</h1>
 
 <div class="card">
+
+  <!-- SALES FORM -->
   <form id="sales-form" class="add-form">
+
+    <!-- HIDDEN TOTAL FIELDS (CRITICAL) -->
+    <input type="hidden" name="subtotal" id="hidden-subtotal">
+    <input type="hidden" name="vat" id="hidden-vat">
+    <input type="hidden" name="total" id="hidden-total">
+
+    <!-- CLIENT -->
     <select name="client_id" id="client_id" required>
       <option value="">Select client</option>
       {% for c in clients %}
       <option value="{{ c.id }}">{{ c.name }}</option>
       {% endfor %}
     </select>
+
+    <!-- STORE -->
     <select name="store_id" id="store_id" required>
       <option value="">Select store</option>
       {% for s in stores %}
       <option value="{{ s.id }}">{{ s.name }}</option>
       {% endfor %}
     </select>
-    <input id="barcode-input" placeholder="Scan barcode or type product name">
+
+    <!-- BARCODE INPUT -->
+    <input id="barcode-input" placeholder="Scan barcode or type barcode manually">
+
     <button type="button" id="add-item-btn">Add Item</button>
+
+    <!-- SALES TABLE -->
+    <table class="data-table" id="sales-items-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Qty</th>
+          <th>Price (Incl VAT)</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="itemsTableBody"></tbody>
+    </table>
+
+    <!-- VAT-INCLUSIVE TOTALS -->
+    <p>Subtotal (Ex VAT): <span id="sales-subtotal">0.00</span></p>
+    <p>VAT (15%): <span id="sales-vat">0.00</span></p>
+    <p><strong>Grand Total: <span id="sales-total">0.00</span></strong></p>
+
+    <!-- COMPLETE SALE BUTTON MUST BE INSIDE FORM -->
+    <button type="button" id="submit-sale-btn">Complete Sale</button>
+
   </form>
-
-  <table class="data-table" id="sales-items-table">
-    <thead>
-      <tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <p>Total: <span id="sales-total">0.00</span></p>
-  <button type="button" id="submit-sale-btn">Complete Sale</button>
 </div>
 
 <script>
-  const products = {{ products|tojson }};
+document.addEventListener("DOMContentLoaded", function() {
+
+  // ---------------------------------------------
+  // FIND EXISTING ROW BY PRODUCT ID
+  // ---------------------------------------------
+  function findRowByProductId(productId) {
+      const rows = document.querySelectorAll(".item-row");
+      for (let row of rows) {
+          const select = row.querySelector(".product-select");
+          if (select && select.value == productId) {
+              return row;
+          }
+      }
+      return null;
+  }
+
+  // ---------------------------------------------
+  // INCREASE QTY IF PRODUCT ALREADY EXISTS
+  // ---------------------------------------------
+  function increaseQty(row) {
+      const qtyInput = row.querySelector(".qty-input");
+      const priceInput = row.querySelector(".price-input");
+      const totalInput = row.querySelector(".total-input");
+
+      let qty = parseFloat(qtyInput.value) || 1;
+      let price = parseFloat(priceInput.value) || 0;
+
+      qty += 1;
+      qtyInput.value = qty;
+      totalInput.value = (qty * price).toFixed(2);
+
+      updateTotal();
+  }
+
+  // ---------------------------------------------
+  // ADD NEW ROW
+  // ---------------------------------------------
+  function addRow(product) {
+      const tbody = document.getElementById("itemsTableBody");
+
+      const row = document.createElement("tr");
+      row.classList.add("item-row");
+
+      row.innerHTML = `
+        <td>
+          <select class="product-select" name="product_id[]" onchange="manualSelect(this)">
+            <option value="">Select product</option>
+            {% for p in products %}
+            <option value="{{ p.id }}" data-price="{{ p.price }}" data-barcode="{{ p.barcode }}">
+              {{ p.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </td>
+
+        <td><input type="number" name="qty[]" class="qty-input" value="1" min="1"></td>
+        <td><input type="text" name="price[]" class="price-input" readonly></td>
+        <td><input type="text" name="total[]" class="total-input" readonly></td>
+        <td><button type="button" class="remove-btn">X</button></td>
+      `;
+
+      tbody.appendChild(row);
+
+      if (product) {
+          const select = row.querySelector(".product-select");
+
+          let option = select.querySelector(`option[value="${product.id}"]`);
+          if (!option) {
+              option = document.createElement("option");
+              option.value = product.id;
+              option.dataset.price = product.price;
+              option.dataset.barcode = product.barcode;
+              option.textContent = product.name;
+              select.appendChild(option);
+          }
+
+          select.value = product.id;
+
+          row.querySelector(".price-input").value = product.price.toFixed(2);
+          row.querySelector(".total-input").value = product.price.toFixed(2);
+      }
+
+      updateTotal();
+  }
+
+  // ---------------------------------------------
+  // MANUAL PRODUCT SELECTION
+  // ---------------------------------------------
+  window.manualSelect = function(select) {
+      const price = parseFloat(select.options[select.selectedIndex].dataset.price || 0);
+      const row = select.closest("tr");
+
+      row.querySelector(".price-input").value = price.toFixed(2);
+      row.querySelector(".qty-input").value = 1;
+      row.querySelector(".total-input").value = price.toFixed(2);
+
+      updateTotal();
+  };
+
+  // ---------------------------------------------
+  // UPDATE TOTALS + HIDDEN FIELDS
+  // ---------------------------------------------
+  function updateTotal() {
+      let subtotal = 0;
+      let vatTotal = 0;
+      let grandTotal = 0;
+
+      document.querySelectorAll(".item-row").forEach(row => {
+          const qty = parseFloat(row.querySelector(".qty-input").value) || 1;
+          const price = parseFloat(row.querySelector(".price-input").value) || 0;
+
+          const vat = price * 15 / 115;
+          const net = price - vat;
+
+          subtotal += net * qty;
+          vatTotal += vat * qty;
+          grandTotal += price * qty;
+      });
+
+      document.getElementById("sales-subtotal").innerText = subtotal.toFixed(2);
+      document.getElementById("sales-vat").innerText = vatTotal.toFixed(2);
+      document.getElementById("sales-total").innerText = grandTotal.toFixed(2);
+
+      // CRITICAL: Update hidden fields
+      document.getElementById("hidden-subtotal").value = subtotal.toFixed(2);
+      document.getElementById("hidden-vat").value = vatTotal.toFixed(2);
+      document.getElementById("hidden-total").value = grandTotal.toFixed(2);
+  }
+
+  // ---------------------------------------------
+  // SCANNER + MANUAL BARCODE HANDLER
+  // ---------------------------------------------
+  document.getElementById("barcode-input").addEventListener("change", function() {
+      const code = this.value.trim();
+      if (!code) return;
+
+      fetch(`/check_barcode?code=${code}`)
+        .then(r => r.json())
+        .then(data => {
+
+          if (!data.found) {
+            alert("Product not found");
+            return;
+          }
+
+          const existingRow = findRowByProductId(data.id);
+          if (existingRow) {
+              increaseQty(existingRow);
+          } else {
+              addRow({
+                  id: data.id,
+                  name: data.name,
+                  price: parseFloat(data.price),
+                  barcode: data.barcode
+              });
+          }
+
+          this.value = "";
+        });
+  });
+
+  // ---------------------------------------------
+  // MANUAL ADD ITEM BUTTON
+  // ---------------------------------------------
+  document.getElementById("add-item-btn").addEventListener("click", function() {
+      addRow(null);
+  });
+
+  // ---------------------------------------------
+  // REMOVE ROW
+  // ---------------------------------------------
+  document.addEventListener("click", function(e) {
+      if (e.target.classList.contains("remove-btn")) {
+          e.target.closest("tr").remove();
+          updateTotal();
+      }
+  });
+
+  // ---------------------------------------------
+  // SUBMIT SALE
+  // ---------------------------------------------
+  document.getElementById("submit-sale-btn").addEventListener("click", function() {
+
+      updateTotal(); // ensure hidden fields are updated
+
+      const form = document.getElementById("sales-form");
+      const formData = new FormData(form);
+
+      document.querySelectorAll(".item-row").forEach(row => {
+          formData.append("product_id[]", row.querySelector(".product-select").value);
+          formData.append("qty[]", row.querySelector(".qty-input").value);
+          formData.append("price[]", row.querySelector(".price-input").value);
+          formData.append("total[]", row.querySelector(".total-input").value);
+      });
+
+      fetch("/record_sale", {
+        method: "POST",
+        body: formData
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          alert("Sale completed");
+          location.reload();
+        } else {
+          alert("Error: " + res.error);
+        }
+      });
+  });
+
+});
 </script>
+
 {% endblock %}

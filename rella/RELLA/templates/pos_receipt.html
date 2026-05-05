@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}POS Receipt{% endblock %}
+{% block content %}
+
+<style>
+.receipt-container {
+    width: 380px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    font-family: Arial, sans-serif;
+}
+
+.receipt-header {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.receipt-header h2 {
+    margin: 0;
+    font-size: 1.4em;
+}
+
+.receipt-info {
+    font-size: 0.9em;
+    margin-bottom: 15px;
+}
+
+.receipt-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+}
+
+.receipt-table th,
+.receipt-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9em;
+}
+
+.receipt-totals {
+    font-size: 1em;
+    margin-top: 10px;
+}
+
+.receipt-totals p {
+    margin: 4px 0;
+}
+
+.print-btn {
+    margin-top: 20px;
+    width: 100%;
+}
+</style>
+
+<div class="receipt-container">
+
+    <!-- HEADER -->
+    <div class="receipt-header">
+        <h2>{{ business.name }}</h2>
+        <p>{{ business.address }}</p>
+        <p>{{ business.phone }}</p>
+    </div>
+
+    <!-- RECEIPT INFO -->
+    <div class="receipt-info">
+        <p><strong>Receipt #:</strong> {{ sale.id }}</p>
+        <p><strong>Date:</strong> {{ sale.created_at }}</p>
+        <p><strong>Store:</strong> {{ store.name }}</p>
+        <p><strong>Cashier:</strong> {{ cashier.name }}</p>
+    </div>
+
+    <!-- ITEMS TABLE -->
+    <table class="receipt-table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Price (Incl)</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.product_name }}</td>
+                <td>{{ item.qty }}</td>
+                <td>R {{ "%.2f"|format(item.price) }}</td>
+                <td>R {{ "%.2f"|format(item.price * item.qty) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- VAT-INCLUSIVE TOTALS -->
+    {% set grand_total = items|sum(attribute='total') %}
+    {% set vat_total = grand_total * 15 / 115 %}
+    {% set net_total = grand_total - vat_total %}
+
+    <div class="receipt-totals">
+        <p>Subtotal (Ex VAT): <strong>R {{ "%.2f"|format(net_total) }}</strong></p>
+        <p>VAT (15%): <strong>R {{ "%.2f"|format(vat_total) }}</strong></p>
+        <p><strong>Total: R {{ "%.2f"|format(grand_total) }}</strong></p>
+    </div>
+
+    <!-- PAYMENT INFO -->
+    <div class="receipt-totals" style="margin-top:15px;">
+        <p><strong>Payment Method:</strong> {{ sale.payment_method }}</p>
+
+        {% if sale.payment_method == "Cash" %}
+        <p><strong>Amount Paid:</strong> R {{ "%.2f"|format(sale.amount_paid) }}</p>
+        <p><strong>Change:</strong> R {{ "%.2f"|format(sale.change_due) }}</p>
+        {% endif %}
+    </div>
+
+    <!-- PRINT BUTTON -->
+    <button class="btn-primary print-btn" onclick="window.print()">Print Receipt</button>
+
+</div>
+
+{% endblock %}

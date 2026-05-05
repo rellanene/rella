@@ -30,11 +30,18 @@
 
 .email-attachment {
     margin-top:10px;
-    padding:8px;
+    padding:10px 12px;
     background:#fafafa;
     border-radius:var(--radius);
     border:1px solid #ddd;
-    display:inline-block;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    width:max-content;
+}
+
+.email-attachment span {
+    font-size:1.6em;
 }
 
 .reply-box {
@@ -45,6 +52,32 @@
     box-shadow:var(--shadow);
 }
 </style>
+
+<!-- ATTACHMENT ICON HELPER -->
+<script>
+function getAttachmentIcon(filename) {
+    if (!filename) return "";
+
+    const ext = filename.split('.').pop().toLowerCase();
+
+    const icons = {
+        'pdf': '📄',
+        'doc': '📄',
+        'docx': '📄',
+        'xls': '📊',
+        'xlsx': '📊',
+        'csv': '📊',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'png': '🖼️',
+        'gif': '🖼️',
+        'zip': '🗂️',
+        'rar': '🗂️'
+    };
+
+    return icons[ext] || '📎';
+}
+</script>
 
 <div class="thread-container">
 
@@ -64,7 +97,12 @@
 
         {% if m.attachment_path %}
         <div class="email-attachment">
-            📎 <a href="/{{ m.attachment_path }}" target="_blank">Download attachment</a>
+            <span>
+                <script>
+                    document.write(getAttachmentIcon("{{ m.attachment_path }}"));
+                </script>
+            </span>
+            <a href="/{{ m.attachment_path }}" target="_blank">Download attachment</a>
         </div>
         {% endif %}
 

@@ -253,19 +253,83 @@ def export_records_csv():
     resp.headers['Content-Disposition'] = 'attachment; filename=records.csv'
     return resp
 
-@app.route('/invoice/<int:sale_id>')
+@app.route("/invoice/<int:sale_id>")
 @require_login
 def invoice_view(sale_id):
     user = current_user()
-    sale = query_one("SELECT s.*, c.name as client_name, c.email as client_email FROM sales s LEFT JOIN clients c ON s.client_id=c.id WHERE s.id=%s", (sale_id,))
-    if not sale:
-        flash('Invoice not found', 'error')
-        return redirect(url_for('records'))
-    items = query_all("""SELECT si.*, p.name as product_name
-                         FROM sale_items si
-                         LEFT JOIN products p ON si.product_id=p.id
-                         WHERE si.sale_id=%s""", (sale_id,))
-    return render_template('invoice.html', sale=sale, items=items, user=user)
+
+    # Load sale header
+    sale = query_one("""
+        SELECT 
+            s.*, 
+            c.name AS client_name, 
+            u.username AS user_name
+        FROM sales s
+        LEFT JOIN clients c ON s.client_id = c.id
+        LEFT JOIN users u ON s.created_by = u.id
+        WHERE s.id=%s
+    """, (sale_id,))
+
+    # Detect REAL column names in sale_items
+    cols = query_all("SHOW COLUMNS FROM sale_items")
+    colnames = [c["Field"] for c in cols]
+
+    # Detect sale_id column
+    sale_id_col = next(c for c in colnames if "sale" in c.replace(" ", "").lower())
+
+    # Detect product_id column
+    product_id_col = next(c for c in colnames if "product" in c.replace(" ", "").lower())
+
+    # Detect quantity column
+    qty_col = next(c for c in colnames if "quantity" in c.replace(" ", "").lower())
+
+    # Detect unit price column
+    unit_price_col = next(
+        c for c in colnames 
+        if "unit" in c.replace(" ", "").lower() and "price" in c.replace(" ", "").lower()
+    )
+
+    # Detect total price column
+    total_price_col = next(
+        c for c in colnames 
+        if "total" in c.replace(" ", "").lower() and "price" in c.replace(" ", "").lower()
+    )
+
+    # Load raw sale items
+    sql = f"SELECT * FROM sale_items WHERE `{sale_id_col}`=%s"
+    items_raw = query_all(sql, (sale_id,))
+
+    # GROUP ITEMS BY PRODUCT
+    grouped = {}
+
+    for it in items_raw:
+        pid = it.get(product_id_col)
+        qty = int(it.get(qty_col) or 0)
+        price = float(it.get(unit_price_col) or 0)
+        total = float(it.get(total_price_col) or 0)
+
+        # Fetch product name
+        product = query_one("SELECT name FROM products WHERE id=%s", (pid,))
+        product_name = product["name"] if product else "Unknown Product"
+
+        if pid not in grouped:
+            grouped[pid] = {
+                "product_id": pid,
+                "product_name": product_name,
+                "qty": qty,
+                "price": price,
+                "total": total
+            }
+        else:
+            grouped[pid]["qty"] += qty
+            grouped[pid]["total"] += total
+
+    # Convert dict to list
+    items = list(grouped.values())
+
+    return render_template("invoice.html", sale=sale, items=items, user=user)
+
+
 
 @app.route('/invoice/<int:sale_id>/pdf')
 @require_login
@@ -476,34 +540,65 @@ def clients():
     return render_template('clients.html', clients=rows, user=user)
 
 # --- Sales (simple flow) ---
-@app.route('/sales', methods=['GET','POST'])
+@app.route('/sales', methods=['GET'])
 @require_login
 def sales():
     user = current_user()
-    stores = query_all("SELECT * FROM stores")
-    products = query_all("SELECT * FROM products")
-    clients = query_all("SELECT * FROM clients")
-    if request.method == 'POST':
-        # expected JSON payload or form with items
-        client_id = request.form.get('client_id')
-        store_id = request.form.get('store_id')
-        items = request.form.get('items')  # expected JSON string: [{product_id, qty, unit_price}, ...]
-        import json
-        items = json.loads(items)
-        invoice = generate_invoice_no()
-        total = sum([float(i['qty'])*float(i['unit_price']) for i in items])
-        sale_id = execute("INSERT INTO sales (invoice_no,client_id,total,created_by,store_id) VALUES (%s,%s,%s,%s,%s)", (invoice,client_id,total,user['id'],store_id))
-        for it in items:
-            execute("INSERT INTO sale_items (sale_id,product_id,quantity,unit_price,total_price) VALUES (%s,%s,%s,%s,%s)",
-                    (sale_id,it['product_id'],it['qty'],it['unit_price'], float(it['qty'])*float(it['unit_price'])))
-            # decrement stock
-            execute("UPDATE store_stock SET quantity = quantity - %s, updated_by=%s WHERE product_id=%s AND store_id=%s",
-                    (it['qty'], user['id'], it['product_id'], store_id))
-            execute("INSERT INTO movements (product_id,movement_type,qty,from_store,to_store,invoice_id,created_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                    (it['product_id'],'sale',it['qty'],store_id,None,sale_id,user['id']))
-        log_action(user['id'], 'create_sale', f'Created sale {invoice}')
-        return jsonify({'status':'ok','invoice':invoice})
-    return render_template('sales.html', stores=stores, products=products, clients=clients, user=user)
+
+    stores = query_all("SELECT id, name FROM stores ORDER BY name ASC")
+    clients = query_all("SELECT id, name FROM clients ORDER BY name ASC")
+
+    raw_products = query_all("SELECT * FROM products ORDER BY name ASC")
+
+    products = []
+
+    for p in raw_products:
+        detected_price = None
+
+        # Auto-detect retail price column (handles ALL hidden spaces)
+        for key in p.keys():
+            cleaned = (
+                key.replace(" ", "")
+                   .replace("\u00A0", "")
+                   .replace("\t", "")
+                   .replace("\u2007", "")
+                   .replace("\u202F", "")
+                   .lower()
+            )
+
+            if "retail" in cleaned and "price" in cleaned:
+                detected_price = p[key]
+                break
+
+        # Fallback to legacy "price" column
+        if detected_price is None:
+            detected_price = p.get("price", 0)
+
+        # Guarantee numeric value
+        try:
+            detected_price = float(detected_price)
+        except:
+            detected_price = 0.00
+
+        # FINAL guaranteed product dict
+        products.append({
+            "id": p["id"],
+            "name": p["name"],
+            "barcode": p["barcode"],
+            "price": detected_price   # ALWAYS exists now
+        })
+
+    return render_template(
+        "sales.html",
+        stores=stores,
+        products=products,
+        clients=clients,
+        user=user
+    )
+
+
+
+
 
 # --- POS (placeholder) ---
 @app.route('/pos')
@@ -522,19 +617,133 @@ def records():
     q = request.args.get('q','')
     start = request.args.get('start')
     end = request.args.get('end')
-    sql = "SELECT s.*, c.name as client_name, u.username as user_name FROM sales s LEFT JOIN clients c ON s.client_id=c.id LEFT JOIN users u ON s.created_by=u.id WHERE 1=1"
+
+    sql = """
+        SELECT 
+            s.id,
+            s.invoice_no,
+            s.client_id,
+            s.subtotal,
+            s.vat,
+            s.total,
+            s.created_at,
+            c.name AS client_name,
+            u.username AS user_name
+        FROM sales s
+        LEFT JOIN clients c ON s.client_id = c.id
+        LEFT JOIN users u ON s.created_by = u.id
+        WHERE 1=1
+    """
+
     params = []
+
     if q:
-        sql += " AND (s.invoice_no LIKE %s)"
+        sql += " AND s.invoice_no LIKE %s"
         params.append(f'%{q}%')
+
     if start:
-        sql += " AND s.created_at >= %s"
+        sql += " AND DATE(s.created_at) >= %s"
         params.append(start)
+
     if end:
-        sql += " AND s.created_at <= %s"
+        sql += " AND DATE(s.created_at) <= %s"
         params.append(end)
+
+    sql += " ORDER BY s.created_at DESC"
+
     rows = query_all(sql, params)
+
     return render_template('records.html', records=rows, user=user)
+
+
+@app.route('/record_sale', methods=['POST'])
+@require_login
+def record_sale():
+    user = current_user()
+
+    client_id = request.form.get("client_id")
+    store_id = request.form.get("store_id")
+
+    product_ids = request.form.getlist("product_id[]")
+    qtys = request.form.getlist("qty[]")
+    prices = request.form.getlist("price[]")
+    totals = request.form.getlist("total[]")
+
+    subtotal = request.form.get("subtotal")
+    vat = request.form.get("vat")
+    total = request.form.get("total")
+
+    # Insert sale header
+    sale_id = execute("""
+        INSERT INTO sales (client_id, store_id, subtotal, vat, total, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (client_id, store_id, subtotal, vat, total, user["id"]))
+
+    # ⭐ Generate invoice number
+    invoice_no = f"INV-{sale_id:06d}"
+    execute("UPDATE sales SET invoice_no=%s WHERE id=%s", (invoice_no, sale_id))
+
+    # Insert sale items
+    cols = query_all("SHOW COLUMNS FROM sale_items")
+    colnames = [c['Field'] for c in cols]
+
+    sale_id_col = next(c for c in colnames if "sale" in c.replace(" ", "").lower())
+    product_id_col = next(c for c in colnames if "product" in c.replace(" ", "").lower())
+    qty_col = next(c for c in colnames if "quantity" in c.replace(" ", "").lower())
+    unit_price_col = next(c for c in colnames if "unit" in c.replace(" ", "").lower() and "price" in c.replace(" ", "").lower())
+    total_price_col = next(c for c in colnames if "total" in c.replace(" ", "").lower() and "price" in c.replace(" ", "").lower())
+
+    insert_sql = f"""
+        INSERT INTO sale_items (`{sale_id_col}`, `{product_id_col}`, `{qty_col}`, `{unit_price_col}`, `{total_price_col}`)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+
+    for pid, qty, price, line_total in zip(product_ids, qtys, prices, totals):
+        execute(insert_sql, (sale_id, pid, qty, price, line_total))
+
+    return jsonify(success=True)
+
+
+
+
+@app.route('/check_barcode')
+def check_barcode():
+    code = request.args.get('code')
+
+    # Load full product row
+    product = query_one("""
+        SELECT *
+        FROM products
+        WHERE barcode = %s
+    """, (code,))
+
+    if not product:
+        return jsonify(found=False)
+
+    # Detect the correct retail price column
+    price = None
+    for key in product.keys():
+        cleaned = key.replace(" ", "").lower()
+        if "retail" in cleaned and "price" in cleaned:
+            price = product[key]
+            break
+
+    # Fallback if needed
+    if price is None:
+        price = product.get("price", 0)
+
+    return jsonify(
+        found=True,
+        id=product['id'],
+        name=product['name'],
+        barcode=product['barcode'],
+        price=float(price)
+    )
+
+
+
+    
+    
 
 # --- Stores ---
 @app.route('/stores', methods=['GET','POST'])

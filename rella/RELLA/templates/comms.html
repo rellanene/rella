@@ -189,22 +189,62 @@
         </div>
 
         <!-- EMAIL -->
-        <div class="sidebar-section">
-            <div class="sidebar-title">Email</div>
-            <button class="btn-accent btn-small" onclick="openCompose()">Compose</button>
+		<!-- EMAIL SECTION -->
+		<div class="sidebar-section">
+		    <div class="sidebar-title">Email</div>
 
-            <div style="margin-top:10px;">
-                {% for m in inbox %}
-                <div class="sidebar-item" onclick="openThread({{ m.thread_id }})">
-                    <strong>{{ m.subject }}</strong><br>
-                    <small>{{ m.sender_name }} — {{ m.created_at }}</small>
-                    {% if not m.is_read %}
-                    <span style="color:red; font-weight:bold;">●</span>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
+		    <!-- COMPOSE BUTTON -->
+		    <button class="btn-accent btn-small" onclick="openCompose()">Compose</button>
+
+		    <!-- INBOX -->
+		    <div style="margin-top:20px; font-weight:700; color:#000;">Inbox</div>
+
+		    {% for m in inbox %}
+		    <div class="sidebar-item" onclick="openThread({{ m.thread_id }})">
+
+		        <div style="font-weight:600;">
+		            {{ m.subject }}
+		        </div>
+
+		        <small>{{ m.sender_name }} — {{ m.created_at }}</small>
+
+		        {% if m.attachment_path %}
+		        <div style="font-size:1.3em; margin-top:4px;">
+		            <script>
+		                document.write(getAttachmentIcon("{{ m.attachment_path }}"));
+		            </script>
+		        </div>
+		        {% endif %}
+
+		        {% if not m.is_read %}
+		        <span style="color:red; font-weight:bold;">●</span>
+		        {% endif %}
+		    </div>
+		    {% endfor %}
+
+		    <!-- SENT ITEMS -->
+		    <div style="margin-top:25px; font-weight:700; color:#000;">Sent</div>
+
+		    {% for s in sent %}
+		    <div class="sidebar-item" onclick="openThread({{ s.thread_id }})">
+
+		        <div style="font-weight:600;">
+		            {{ s.subject }}
+		        </div>
+
+		        <small>You — {{ s.created_at }}</small>
+
+		        {% if s.attachment_path %}
+		        <div style="font-size:1.3em; margin-top:4px;">
+		            <script>
+		                document.write(getAttachmentIcon("{{ s.attachment_path }}"));
+		            </script>
+		        </div>
+		        {% endif %}
+		    </div>
+		    {% endfor %}
+		</div>
+
 
         <!-- CHAT -->
         <div class="sidebar-section">
