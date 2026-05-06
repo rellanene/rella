@@ -55,8 +55,8 @@
       <td>{{ r.user_name }}</td>
 
       <td>
-        <a href="{{ url_for('invoice_view', sale_id=r.id) }}">View</a> |
-        <a href="{{ url_for('invoice_pdf', sale_id=r.id) }}">PDF</a>
+        <a href="{{ url_for('invoice_view', sale_id=r.id) }}">View</a> 
+        
       </td>
     </tr>
     {% endfor %}
