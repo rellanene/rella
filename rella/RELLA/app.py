@@ -374,6 +374,10 @@ def invoice_pdf(sale_id):
 
 
 
+from datetime import datetime
+import io
+import csv
+
 @app.route('/movements/export')
 @require_login
 def export_movements_csv():
@@ -381,35 +385,63 @@ def export_movements_csv():
     q = request.args.get('q','')
     start = request.args.get('start')
     end = request.args.get('end')
-    sql = """SELECT m.created_at, u.username as user_name, p.name as product_name,
-             m.movement_type, m.qty, m.from_store, m.to_store, m.invoice_id
-             FROM movements m
-             LEFT JOIN users u ON m.created_by=u.id
-             LEFT JOIN products p ON m.product_id=p.id
-             WHERE 1=1"""
+
+    sql = """
+        SELECT 
+            m.*,
+            p.name AS product_name,
+            u.username AS user_name,
+            s.invoice_no
+        FROM movements m
+        LEFT JOIN products p ON m.product_id = p.id
+        LEFT JOIN users u ON m.created_by = u.id
+        LEFT JOIN sales s ON m.invoice_id = s.id
+        WHERE 1=1
+    """
     params = []
+
     if q:
-        sql += " AND (m.invoice_id LIKE %s OR p.name LIKE %s)"
+        sql += " AND (s.invoice_no LIKE %s OR p.name LIKE %s)"
         params.extend((f'%{q}%', f'%{q}%'))
+
     if start:
         sql += " AND m.created_at >= %s"
         params.append(start)
+
     if end:
         sql += " AND m.created_at <= %s"
         params.append(end)
+
+    sql += " ORDER BY m.id DESC"
+
     rows = query_all(sql, params)
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Date & Time','User','Product','Type','Quantity','From','To','Invoice'])
+    writer.writerow(['Date & Time', 'User', 'Product', 'Type', 'Qty', 'From', 'To', 'Invoice'])
+
     for r in rows:
-        writer.writerow([r['created_at'], r['user_name'], r['product_name'], r['movement_type'],
-                         r['qty'], r['from_store'], r['to_store'], r['invoice_id']])
+        writer.writerow([
+            r['created_at'],
+            r['user_name'],
+            r['product_name'],
+            r['movement_type'],
+            r['qty'],
+            r['from_store'],
+            r['to_store'],
+            r['invoice_no'] if r['invoice_no'] else ''
+        ])
 
     log_action(user['id'], 'export_movements_csv', 'Exported movements CSV')
+
+    # ⭐ Timestamp filename
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"movements_{timestamp}.csv"
+
     resp = Response(output.getvalue(), mimetype='text/csv')
-    resp.headers['Content-Disposition'] = 'attachment; filename=movements.csv'
+    resp.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return resp
+
 
 
 
@@ -680,6 +712,8 @@ def records():
 
 from datetime import datetime
 
+from datetime import datetime
+
 @app.route('/record_sale', methods=['POST'])
 @require_login
 def record_sale():
@@ -703,9 +737,8 @@ def record_sale():
         VALUES (%s, %s, %s, %s, %s, %s)
     """, (client_id, store_id, subtotal, vat, total, user["id"]))
 
-    # ⭐ NEW: Timestamp‑based invoice number
+    # Timestamp invoice number
     invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S")
-
     execute("UPDATE sales SET invoice_no=%s WHERE id=%s", (invoice_no, sale_id))
 
     # Insert sale items
@@ -726,7 +759,23 @@ def record_sale():
     for pid, qty, price, line_total in zip(product_ids, qtys, prices, totals):
         execute(insert_sql, (sale_id, pid, qty, price, line_total))
 
+    # ⭐ INSERT MOVEMENT RECORDS (this was missing)
+    for pid, qty in zip(product_ids, qtys):
+        execute("""
+            INSERT INTO movements (product_id, qty, movement_type, from_store, to_store, invoice_id, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            pid,
+            qty,
+            "SALE",
+            store_id,
+            None,
+            sale_id,
+            user["id"]
+        ))
+
     return jsonify(success=True)
+
 
 
 
@@ -841,19 +890,42 @@ def movements():
     q = request.args.get('q','')
     start = request.args.get('start')
     end = request.args.get('end')
-    sql = "SELECT m.*, p.name as product_name, u.username as user_name FROM movements m LEFT JOIN products p ON m.product_id=p.id LEFT JOIN users u ON m.created_by=u.id WHERE 1=1"
+
+    sql = """
+        SELECT 
+            m.*,
+            p.name AS product_name,
+            u.username AS user_name,
+            s.id AS invoice_id,
+            s.invoice_no
+        FROM movements m
+        LEFT JOIN products p ON m.product_id = p.id
+        LEFT JOIN users u ON m.created_by = u.id
+        LEFT JOIN sales s ON m.invoice_id = s.id
+        WHERE 1=1
+    """
+
     params = []
+
     if q:
-        sql += " AND (m.invoice_id LIKE %s OR p.name LIKE %s)"
+        sql += " AND (s.invoice_no LIKE %s OR p.name LIKE %s)"
         params.extend((f'%{q}%', f'%{q}%'))
+
     if start:
         sql += " AND m.created_at >= %s"
         params.append(start)
+
     if end:
         sql += " AND m.created_at <= %s"
         params.append(end)
+
+    # newest first
+    sql += " ORDER BY m.id DESC"
+
     rows = query_all(sql, params)
+
     return render_template('movements.html', movements=rows, user=user)
+
 
 # --- Tasks ---
 @app.route('/tasks', methods=['GET','POST'])

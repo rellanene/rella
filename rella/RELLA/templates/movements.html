@@ -2,39 +2,105 @@
 {% block title %}Movements{% endblock %}
 {% block content %}
 <h1>Movements</h1>
+
+<style>
+    .btn-gold {
+        background-color: #d4af37;
+        color: #000;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .btn-gold:hover {
+        background-color: #c19b2f;
+    }
+
+    .btn-black {
+        background-color: #1f2937;
+        color: #fff;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .btn-black:hover {
+        background-color: #111827;
+    }
+
+    .search-form input,
+    .search-form button,
+    .search-form a {
+        margin-right: 6px;
+    }
+
+    .invoice-link {
+        color: #0A1A2F;
+        font-weight: bold;
+        text-decoration: none;
+    }
+    .invoice-link:hover {
+        text-decoration: underline;
+    }
+</style>
+
 <form method="get" class="search-form">
-  <input name="q" placeholder="Search by invoice or product" value="{{ request.args.get('q','') }}">
-  <input name="start" type="date" value="{{ request.args.get('start','') }}">
-  <input name="end" type="date" value="{{ request.args.get('end','') }}">
-  <button type="submit">Filter</button>
-  <a href="{{ url_for('export_movements_csv', q=request.args.get('q',''), start=request.args.get('start',''), end=request.args.get('end','')) }}">Export CSV</a>
+    <input name="q" placeholder="Search by invoice or product" value="{{ request.args.get('q','') }}">
+    <input name="start" type="date" value="{{ request.args.get('start','') }}">
+    <input name="end" type="date" value="{{ request.args.get('end','') }}">
+    <button type="submit" class="btn-black">Filter</button>
+
+    <a class="btn-gold"
+       href="{{ url_for('export_movements_csv',
+                        q=request.args.get('q',''),
+                        start=request.args.get('start',''),
+                        end=request.args.get('end','')) }}">
+        Export CSV
+    </a>
 </form>
 
 <table class="data-table">
-  <thead>
-    <tr>
-      <th>Date & Time</th><th>User</th><th>Product</th><th>Type</th><th>Qty</th><th>From</th><th>To</th><th>Invoice</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for m in movements %}
-    <tr>
-      <td>{{ m.created_at }}</td>
-      <td>{{ m.user_name }}</td>
-      <td>{{ m.product_name }}</td>
-      <td>{{ m.movement_type }}</td>
-      <td>{{ m.qty }}</td>
-      <td>{{ m.from_store }}</td>
-      <td>{{ m.to_store }}</td>
-      <td>
-        {% if m.invoice_id %}
-          <a href="{{ url_for('invoice_view', sale_id=m.invoice_id) }}">View</a>
-        {% else %}
-          -
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
+    <thead>
+        <tr>
+            <th>Date & Time</th>
+            <th>User</th>
+            <th>Product</th>
+            <th>Type</th>
+            <th>Qty</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Invoice</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for m in movements %}
+        <tr>
+            <td>{{ m.created_at }}</td>
+            <td>{{ m.user_name }}</td>
+            <td>{{ m.product_name }}</td>
+            <td>{{ m.movement_type }}</td>
+            <td>{{ m.qty }}</td>
+
+            <!-- FIX: Show proper store names -->
+            <td>{{ m.from_store if m.from_store else "-" }}</td>
+            <td>{{ m.to_store if m.to_store else "-" }}</td>
+
+            <td>
+                {% if m.invoice_id %}
+                    <a class="invoice-link"
+                       href="{{ url_for('invoice_view', sale_id=m.invoice_id) }}">
+                       View
+                    </a>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+
 {% endblock %}
