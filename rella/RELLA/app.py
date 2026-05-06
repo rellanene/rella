@@ -656,6 +656,8 @@ def records():
     return render_template('records.html', records=rows, user=user)
 
 
+from datetime import datetime
+
 @app.route('/record_sale', methods=['POST'])
 @require_login
 def record_sale():
@@ -679,8 +681,9 @@ def record_sale():
         VALUES (%s, %s, %s, %s, %s, %s)
     """, (client_id, store_id, subtotal, vat, total, user["id"]))
 
-    # ⭐ Generate invoice number
-    invoice_no = f"INV-{sale_id:06d}"
+    # ⭐ NEW: Timestamp‑based invoice number
+    invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S")
+
     execute("UPDATE sales SET invoice_no=%s WHERE id=%s", (invoice_no, sale_id))
 
     # Insert sale items
@@ -702,6 +705,7 @@ def record_sale():
         execute(insert_sql, (sale_id, pid, qty, price, line_total))
 
     return jsonify(success=True)
+
 
 
 
