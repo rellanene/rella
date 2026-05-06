@@ -10,6 +10,8 @@ import string
 from flask import Response, send_file
 import csv
 import pdfkit
+import io
+
 
 
 
@@ -229,29 +231,49 @@ def export_records_csv():
     q = request.args.get('q','')
     start = request.args.get('start')
     end = request.args.get('end')
-    sql = "SELECT s.invoice_no, c.name as client_name, s.total, s.created_at, u.username as user_name FROM sales s LEFT JOIN clients c ON s.client_id=c.id LEFT JOIN users u ON s.created_by=u.id WHERE 1=1"
+
+    sql = """
+        SELECT s.invoice_no, c.name as client_name, s.total, s.created_at, u.username as user_name
+        FROM sales s
+        LEFT JOIN clients c ON s.client_id=c.id
+        LEFT JOIN users u ON s.created_by=u.id
+        WHERE 1=1
+    """
     params = []
+
     if q:
         sql += " AND (s.invoice_no LIKE %s)"
         params.append(f'%{q}%')
+
     if start:
         sql += " AND s.created_at >= %s"
         params.append(start)
+
     if end:
         sql += " AND s.created_at <= %s"
         params.append(end)
+
+    # ⭐ NEW: newest at top
+    sql += " ORDER BY s.id DESC"
+
     rows = query_all(sql, params)
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Invoice', 'Client', 'Total', 'Date & Time', 'User'])
+
     for r in rows:
         writer.writerow([r['invoice_no'], r['client_name'], r['total'], r['created_at'], r['user_name']])
 
     log_action(user['id'], 'export_records_csv', 'Exported records CSV')
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"records_{timestamp}.csv"
+
     resp = Response(output.getvalue(), mimetype='text/csv')
-    resp.headers['Content-Disposition'] = 'attachment; filename=records.csv'
+    resp.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return resp
+
 
 @app.route("/invoice/<int:sale_id>")
 @require_login
