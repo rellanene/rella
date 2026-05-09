@@ -715,10 +715,11 @@ def pos():
 @require_login
 def records():
     user = current_user()
-    q = request.args.get('q','')
+    q = request.args.get('q', '')
     start = request.args.get('start')
     end = request.args.get('end')
 
+    # Base query
     sql = """
         SELECT 
             s.id,
@@ -738,23 +739,51 @@ def records():
 
     params = []
 
+    # Invoice search
     if q:
         sql += " AND s.invoice_no LIKE %s"
-        params.append(f'%{q}%')
+        params.append(f"%{q}%")
 
+    # Date range filters
     if start:
         sql += " AND DATE(s.created_at) >= %s"
         params.append(start)
-
     if end:
         sql += " AND DATE(s.created_at) <= %s"
         params.append(end)
 
+    # Order newest first
     sql += " ORDER BY s.created_at DESC"
 
     rows = query_all(sql, params)
 
-    return render_template('records.html', records=rows, user=user)
+    # --- Totals for finances integration ---
+    totals_sql = """
+        SELECT 
+            COALESCE(SUM(s.subtotal), 0) AS total_subtotal,
+            COALESCE(SUM(s.vat), 0) AS total_vat,
+            COALESCE(SUM(s.total), 0) AS total_incl_vat
+        FROM sales s
+        WHERE 1=1
+    """
+    totals_params = []
+
+    if start:
+        totals_sql += " AND DATE(s.created_at) >= %s"
+        totals_params.append(start)
+    if end:
+        totals_sql += " AND DATE(s.created_at) <= %s"
+        totals_params.append(end)
+
+    totals = query_one(totals_sql, totals_params)
+
+    return render_template(
+        'records.html',
+        records=rows,
+        totals=totals,
+        user=user
+    )
+
 
 @app.route('/pos', methods=['GET'])
 @require_login
@@ -767,6 +796,144 @@ def pos_page():
     """)
     stores = query_all("SELECT * FROM stores ORDER BY name")
     return render_template('pos.html', user=user, products=products, stores=stores)
+from flask import Response
+import csv
+from io import StringIO
+from datetime import datetime
+
+# --- Unified Finances Route (View + CSV Export) ---
+@app.route('/finances', methods=['GET'], endpoint='finances_page')
+@require_login
+def finances_page():
+    user = current_user()
+
+    # Filters
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    user_id = request.args.get('user_id', '')
+    store_id = request.args.get('store_id', '')
+    mode = request.args.get('mode', 'view')   # view or csv
+
+    # Build WHERE clause
+    where = ["1=1"]
+    params = []
+
+    if start_date:
+        where.append("DATE(s.created_at) >= %s")
+        params.append(start_date)
+    if end_date:
+        where.append("DATE(s.created_at) <= %s")
+        params.append(end_date)
+    if user_id:
+        where.append("s.created_by = %s")
+        params.append(user_id)
+    if store_id:
+        where.append("s.store_id = %s")
+        params.append(store_id)
+
+    where_sql = " AND ".join(where)
+
+    # Base query for records
+    base_query = f"""
+        SELECT 
+            s.id,
+            s.invoice_no,
+            s.subtotal,
+            s.vat,
+            s.total,
+            s.created_at,
+            s.store_id,
+            u.username AS user_name,
+            st.name AS store_name
+        FROM sales s
+        LEFT JOIN users u ON s.created_by = u.id
+        LEFT JOIN stores st ON s.store_id = st.id
+        WHERE {where_sql}
+        ORDER BY s.created_at DESC
+    """
+
+    # CSV EXPORT MODE
+    if mode == "csv":
+        rows = query_all(base_query, params)
+
+        si = StringIO()
+        writer = csv.writer(si)
+        writer.writerow(["Invoice", "Subtotal", "VAT", "Total", "Date", "User", "Store"])
+
+        for r in rows:
+            writer.writerow([
+                r['invoice_no'],
+                r['subtotal'],
+                r['vat'],
+                r['total'],
+                r['created_at'],
+                r['user_name'],
+                r['store_name']
+            ])
+
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"finances_{start_date or 'all'}_{end_date or 'all'}_{ts}.csv"
+
+        output = si.getvalue()
+        resp = Response(output, mimetype="text/csv")
+        resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
+        return resp
+
+    # NORMAL PAGE VIEW
+    records = query_all(base_query, params)
+
+    totals = query_one(f"""
+        SELECT
+            COALESCE(SUM(s.subtotal), 0) AS total_subtotal,
+            COALESCE(SUM(s.vat), 0) AS total_vat,
+            COALESCE(SUM(s.total), 0) AS total_incl_vat
+        FROM sales s
+        WHERE {where_sql}
+    """, params)
+
+    per_user = query_all(f"""
+        SELECT 
+            u.id,
+            u.username,
+            COALESCE(SUM(s.total), 0) AS total_sales
+        FROM sales s
+        LEFT JOIN users u ON s.created_by = u.id
+        WHERE {where_sql}
+        GROUP BY u.id, u.username
+        ORDER BY u.username
+    """, params)
+
+    per_store = query_all(f"""
+        SELECT 
+            st.id,
+            st.name,
+            COALESCE(SUM(s.total), 0) AS total_sales
+        FROM sales s
+        LEFT JOIN stores st ON s.store_id = st.id
+        WHERE {where_sql}
+        GROUP BY st.id, st.name
+        ORDER BY st.name
+    """, params)
+
+    users_list = query_all("SELECT id, username FROM users ORDER BY username")
+    stores_list = query_all("SELECT id, name FROM stores ORDER BY name")
+
+    return render_template(
+        'finances.html',
+        user=user,
+        records=records,
+        totals=totals,
+        per_user=per_user,
+        per_store=per_store,
+        users_list=users_list,
+        stores_list=stores_list,
+        start_date=start_date,
+        end_date=end_date,
+        selected_user_id=user_id,
+        selected_store_id=store_id
+    )
+
+
 
 
 
@@ -1779,11 +1946,157 @@ def comms():
     user = current_user()
     return render_template('comms.html', user=user)
 
-@app.route('/finances')
+# --- Finances main page ---
+@app.route('/finances', methods=['GET', 'POST'])
 @require_login
 def finances():
     user = current_user()
-    return render_template('finances.html', user=user)
+
+    # Date filters
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    cashier_id = request.args.get('cashier_id', '')
+
+    # TODO: wire this to your real records table
+    # Example: records table with type: 'sale', 'expense', 'stock_in', etc.
+    params = []
+    where = []
+
+    if start_date:
+        where.append("r.created_at >= %s")
+        params.append(start_date + " 00:00:00")
+    if end_date:
+        where.append("r.created_at <= %s")
+        params.append(end_date + " 23:59:59")
+    if cashier_id:
+        where.append("r.user_id = %s")
+        params.append(cashier_id)
+
+    where_sql = "WHERE " + " AND ".join(where) if where else ""
+
+    # Company‑wide financial records (from records.html logic)
+    records = query_all(f"""
+        SELECT r.*
+        FROM records r
+        {where_sql}
+        ORDER BY r.created_at DESC
+    """, tuple(params))
+
+    # Example aggregates (you’ll refine based on your schema)
+    totals = query_one(f"""
+        SELECT
+            COALESCE(SUM(CASE WHEN r.type = 'sale' THEN r.amount ELSE 0 END), 0) AS total_sales,
+            COALESCE(SUM(CASE WHEN r.type = 'expense' THEN r.amount ELSE 0 END), 0) AS total_expenses,
+            COALESCE(SUM(CASE WHEN r.type = 'stock_in' THEN r.amount ELSE 0 END), 0) AS total_stock_in
+        FROM records r
+        {where_sql}
+    """, tuple(params))
+
+    # Cashiers for reconciliation filter
+    cashiers = query_all("SELECT id, name FROM users ORDER BY name ASC")
+
+    return render_template(
+        'finances.html',
+        user=user,
+        records=records,
+        totals=totals,
+        cashiers=cashiers,
+        start_date=start_date,
+        end_date=end_date,
+        cashier_id=cashier_id
+    )
+
+
+# --- Export finances to CSV ---
+@app.route('/finances/export/csv')
+@require_login
+def finances_export_csv():
+    user = current_user()
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    cashier_id = request.args.get('cashier_id', '')
+
+    # TODO: reuse same filter logic as /finances
+    # Build CSV from records
+    # Return Response with proper headers
+    # filename should include timestamp
+    # e.g. finances_2025-01-01_2025-01-31_20250130-153000.csv
+
+    # Placeholder
+    flash("CSV export not yet implemented", "info")
+    return redirect(url_for('finances'))
+
+
+# --- Export finances to PDF ---
+@app.route('/finances/export/pdf')
+@require_login
+def finances_export_pdf():
+    user = current_user()
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    cashier_id = request.args.get('cashier_id', '')
+
+    # TODO: generate PDF (e.g. using WeasyPrint / xhtml2pdf)
+    # Use finances.html sections or a dedicated PDF template
+
+    flash("PDF export not yet implemented", "info")
+    return redirect(url_for('finances'))
+
+
+# --- Manual external financial entry ---
+@app.route('/finances/external', methods=['POST'])
+@require_login
+def finances_external():
+    user = current_user()
+
+    entry_date = request.form.get('entry_date')
+    description = request.form.get('description')
+    amount = request.form.get('amount')
+    entry_type = request.form.get('entry_type')  # income / expense / adjustment
+
+    # TODO: insert into records or a dedicated external_finances table
+    # Example:
+    # execute("""
+    #   INSERT INTO records (type, description, amount, created_at, user_id, source)
+    #   VALUES (%s, %s, %s, %s, %s, %s)
+    # """, (entry_type, description, amount, entry_date, user['id'], 'external'))
+
+    flash("External financial entry captured", "success")
+    return redirect(url_for('finances'))
+
+
+# --- File upload for financial docs ---
+@app.route('/finances/upload', methods=['POST'])
+@require_login
+def finances_upload():
+    user = current_user()
+    file = request.files.get('file')
+
+    if not file:
+        flash("No file selected", "error")
+        return redirect(url_for('finances'))
+
+    # TODO: save file to disk or storage, log in DB
+    # path = save_file_somewhere(file)
+    # execute("INSERT INTO finance_files (filename, path, uploaded_by) VALUES (%s,%s,%s)", ...)
+
+    flash("File uploaded", "success")
+    return redirect(url_for('finances'))
+
+
+# --- Download financial file ---
+@app.route('/finances/files/<int:file_id>/download')
+@require_login
+def finances_download(file_id):
+    user = current_user()
+
+    # TODO: fetch file path from DB and send_file(...)
+    # file = query_one("SELECT * FROM finance_files WHERE id=%s", (file_id,))
+    # return send_file(file['path'], as_attachment=True, download_name=file['filename'])
+
+    flash("Download not yet implemented", "info")
+    return redirect(url_for('finances'))
+
 
 # --- Run ---
 if __name__ == '__main__':

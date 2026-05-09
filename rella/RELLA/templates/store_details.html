@@ -33,7 +33,33 @@
 .btn-black:hover {
     background-color: #222;
 }
+
+/* Print header (hidden on screen, visible on print) */
+#print-header {
+    display: none;
+    text-align: center;
+    margin-bottom: 20px;
+}
+@media print {
+    #print-header {
+        display: block;
+    }
+    .btn-black, form, a[href] {
+        display: none !important;
+    }
+}
 </style>
+
+<!-- PRINT HEADER (hidden until printing) -->
+<div id="print-header">
+    <h2>{{ store.name }} — Stock Report</h2>
+    <p id="print-timestamp"></p>
+</div>
+
+<!-- Print Button -->
+<button class="btn-black" onclick="printStockList()" style="margin-bottom:12px;">
+    Print Stock List
+</button>
 
 <!-- Search inside store -->
 <form method="get">
@@ -73,5 +99,16 @@
 <a href="{{ url_for('stores') }}" class="btn-black" style="margin-top:20px;display:inline-block;">
     Back to Stores
 </a>
+
+<script>
+function printStockList() {
+    // Add timestamp before printing
+    const now = new Date();
+    const timestamp = now.toLocaleString();
+    document.getElementById("print-timestamp").textContent = "Printed on: " + timestamp;
+
+    window.print();
+}
+</script>
 
 {% endblock %}

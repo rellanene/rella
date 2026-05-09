@@ -1,8 +1,259 @@
 {% extends "base.html" %}
 {% block title %}Finances{% endblock %}
 {% block content %}
+
 <h1>Finances</h1>
-<div class="card">
-  <p>Placeholder for bookkeeping functions, ledgers, and reports.</p>
+
+<style>
+.section-card {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 15px;
+    background-color: #fafafa;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.btn-gold {
+    background-color: #d4af37;
+    color: black;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+.btn-gold:hover {
+    background-color: #b8952f;
+}
+
+.btn-black {
+    background-color: black;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+.btn-black:hover {
+    background-color: #222;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.data-table th, .data-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #ddd;
+    text-align: left;
+}
+</style>
+
+<!-- Global Filters + Exports -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Filters & Exports</h3>
+    </div>
+
+    <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <label>Start Date:</label>
+        <input type="date" name="start_date" value="{{ start_date }}">
+
+        <label>End Date:</label>
+        <input type="date" name="end_date" value="{{ end_date }}">
+
+        <label>Cashier/User:</label>
+        <select name="cashier_id">
+            <option value="">All</option>
+            {% for c in cashiers %}
+            <option value="{{ c.id }}" {% if cashier_id and cashier_id|int == c.id %}selected{% endif %}>
+                {{ c.name }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <button type="submit" class="btn-black">Apply</button>
+
+        <!-- CSV / PDF exports using same filters -->
+        <a class="btn-gold"
+           href="{{ url_for('finances_export_csv', start_date=start_date, end_date=end_date, cashier_id=cashier_id) }}">
+            Export CSV
+        </a>
+        <a class="btn-gold"
+           href="{{ url_for('finances_export_pdf', start_date=start_date, end_date=end_date, cashier_id=cashier_id) }}">
+            Export PDF
+        </a>
+    </form>
 </div>
+
+<!-- Balance Statement -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Balance Statement</h3>
+        <button class="btn-gold">Export to CSV</button>
+    </div>
+
+    <!-- You will replace this with real balance sheet logic -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Total Assets</td>
+                <td>R 0.00</td>
+            </tr>
+            <tr>
+                <td>Total Liabilities</td>
+                <td>R 0.00</td>
+            </tr>
+            <tr>
+                <td>Equity</td>
+                <td>R 0.00</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Income Statement -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Income Statement</h3>
+        <button class="btn-gold">Export to CSV</button>
+    </div>
+
+    <table class="data-table">
+        <tbody>
+            <tr>
+                <th>Total Sales</th>
+                <td>R {{ totals.total_sales or 0 }}</td>
+            </tr>
+            <tr>
+                <th>Total Expenses</th>
+                <td>R {{ totals.total_expenses or 0 }}</td>
+            </tr>
+            <tr>
+                <th>Stock In (Cost)</th>
+                <td>R {{ totals.total_stock_in or 0 }}</td>
+            </tr>
+            <tr>
+                <th>Net Income (rough)</th>
+                <td>R {{ (totals.total_sales or 0) - (totals.total_expenses or 0) }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Manual External Entries -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Manual External Entries</h3>
+        <button class="btn-gold">Export to CSV</button>
+    </div>
+
+    <form method="post" action="{{ url_for('finances_external') }}" style="display:flex;flex-wrap:wrap;gap:8px;">
+        <input type="date" name="entry_date" required>
+        <input type="text" name="description" placeholder="Description" required>
+        <input type="number" step="0.01" name="amount" placeholder="Amount" required>
+        <select name="entry_type" required>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+            <option value="adjustment">Adjustment</option>
+        </select>
+        <button type="submit" class="btn-black">Add Entry</button>
+    </form>
+</div>
+
+<!-- Reconciliation (Company & User) -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Reconciliation</h3>
+    </div>
+
+    <p><strong>Company‑wide reconciliation</strong> uses the same date filters above.</p>
+    <p><strong>User/Cashier reconciliation</strong> uses the cashier filter above.</p>
+
+    <button class="btn-black">Run Company Reconciliation</button>
+    <button class="btn-black">Run User/Cashier Reconciliation</button>
+</div>
+
+<!-- Raw Records (from records.html logic) -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Financial Records (from records)</h3>
+        <button class="btn-gold">Export to CSV</button>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>User</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td>{{ r.created_at }}</td>
+                <td>{{ r.type }}</td>
+                <td>{{ r.description }}</td>
+                <td>{{ r.amount }}</td>
+                <td>{{ r.user_id }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- File upload / download -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Financial Documents</h3>
+    </div>
+
+    <form method="post" action="{{ url_for('finances_upload') }}" enctype="multipart/form-data" style="margin-bottom:10px;">
+        <input type="file" name="file" required>
+        <button type="submit" class="btn-black">Upload</button>
+    </form>
+
+    <!-- TODO: list files from finance_files table -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Uploaded By</th>
+                <th>Uploaded At</th>
+                <th>Download</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Example placeholder row -->
+            <tr>
+                <td>example.pdf</td>
+                <td>Admin</td>
+                <td>2025-01-01 10:00</td>
+                <td>
+                    <a href="#" class="btn-black">Download</a>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
 {% endblock %}
