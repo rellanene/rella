@@ -1,27 +1,267 @@
 {% extends "base.html" %}
-{% block title %}Transfer{% endblock %}
+{% block title %}Stock Transfer{% endblock %}
 {% block content %}
-<h1>Transfer</h1>
-<form method="post" class="add-form">
-  <select name="product_id" required>
-    <option value="">Select product</option>
-    {% for p in products %}
-    <option value="{{ p.id }}">{{ p.name }}</option>
-    {% endfor %}
-  </select>
-  <select name="from_store" required>
-    <option value="">From store</option>
-    {% for s in stores %}
-    <option value="{{ s.id }}">{{ s.name }}</option>
-    {% endfor %}
-  </select>
-  <select name="to_store" required>
-    <option value="">To store</option>
-    {% for s in stores %}
-    <option value="{{ s.id }}">{{ s.name }}</option>
-    {% endfor %}
-  </select>
-  <input name="qty" type="number" min="1" placeholder="Quantity" required>
-  <button type="submit">Transfer</button>
+
+<h1>Stock Transfer</h1>
+
+<style>
+    .form-container {
+        max-width: 650px;
+        margin: auto;
+    }
+
+    .scan-input {
+        width: 100%;
+        padding: 8px;
+        font-size: 15px;
+        border: 2px solid #d4af37;
+        border-radius: 6px;
+        margin-bottom: 10px;
+    }
+
+    .btn-gold {
+        background-color: #d4af37;
+        color: #000;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .btn-gold:hover {
+        background-color: #c19b2f;
+    }
+
+    .btn-black {
+        background-color: #0A1A2F;
+        color: #fff;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .btn-black:hover {
+        background-color: #07101f;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        table-layout: fixed;
+    }
+    th, td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+        text-align: left;
+        white-space: nowrap;
+    }
+    th:nth-child(1), td:nth-child(1) { width: 60%; }
+    th:nth-child(2), td:nth-child(2) { width: 20%; }
+    th:nth-child(3), td:nth-child(3) { width: 20%; }
+</style>
+
+<div class="form-container">
+
+<form method="POST" id="transfer-form">
+
+    <!-- SCAN BARCODE -->
+    <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">
+
+    <!-- MANUAL PRODUCT SELECT -->
+    <select id="productSelect" class="scan-input">
+        <option value="">Select product manually</option>
+        {% for p in products %}
+        <option value="{{ p.id }}" data-barcode="{{ p.barcode }}">{{ p.name }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- STORE SELECTION CONTROL BUTTONS -->
+    <div style="margin-top: 5px;">
+        <button type="button" id="unlockStores" class="btn-black">Select Stores</button>
+        <button type="button" id="resumeScan" class="btn-gold" style="display:none;">Resume Scanning</button>
+    </div>
+
+    <!-- STORES -->
+    <div style="margin-top: 15px;">
+        <label>From Store:</label>
+        <select name="from_store" id="fromStore" class="scan-input" required disabled>
+            {% for s in stores %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>To Store:</label>
+        <select name="to_store" id="toStore" class="scan-input" required disabled>
+            {% for s in stores %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- TRANSFER TABLE -->
+    <table id="transferTable">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <button type="submit" id="submitTransferBtn" class="btn-gold" style="margin-top: 15px;">Submit Transfer</button>
+
 </form>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    const barcodeInput = document.getElementById("barcode-input");
+    const productSelect = document.getElementById("productSelect");
+    const tableBody = document.querySelector("#transferTable tbody");
+
+    const unlockBtn = document.getElementById("unlockStores");
+    const resumeBtn = document.getElementById("resumeScan");
+    const fromStore = document.getElementById("fromStore");
+    const toStore = document.getElementById("toStore");
+
+    let dropdownMode = false;
+
+    /* ----------------------------------------------------
+       SAME FOCUS ENGINE AS SALES PAGE
+    ---------------------------------------------------- */
+    function focusScanner() {
+        barcodeInput.focus();
+        barcodeInput.select();
+    }
+
+    focusScanner();
+
+    document.addEventListener("click", function(e) {
+        if (!dropdownMode && !barcodeInput.contains(e.target)) {
+            focusScanner();
+        }
+    });
+
+    /* ----------------------------------------------------
+       Unlock / Resume store selection
+    ---------------------------------------------------- */
+    unlockBtn.addEventListener("click", () => {
+        dropdownMode = true;
+        fromStore.disabled = false;
+        toStore.disabled = false;
+        unlockBtn.style.display = "none";
+        resumeBtn.style.display = "inline-block";
+    });
+
+    resumeBtn.addEventListener("click", () => {
+        dropdownMode = false;
+        fromStore.disabled = true;
+        toStore.disabled = true;
+        resumeBtn.style.display = "none";
+        unlockBtn.style.display = "inline-block";
+        focusScanner();
+    });
+
+    /* ----------------------------------------------------
+       Add product to table (FULLY BACKEND COMPATIBLE)
+    ---------------------------------------------------- */
+    function addProduct(productId, productName) {
+        let existing = document.querySelector(`tr[data-id="${productId}"]`);
+
+        if (existing) {
+            let hiddenQty = existing.querySelector("input[name='quantity[]']");
+            let qtyCell = existing.querySelector(".qty");
+
+            let newQty = parseInt(hiddenQty.value) + 1;
+
+            hiddenQty.value = newQty;
+            qtyCell.textContent = newQty;
+
+            return;
+        }
+
+        let row = document.createElement("tr");
+        row.setAttribute("data-id", productId);
+
+        row.innerHTML = `
+            <td>
+                ${productName}
+                <input type="hidden" name="product_id[]" value="${productId}">
+            </td>
+
+            <td class="qty">
+                1
+                <input type="hidden" name="quantity[]" value="1">
+            </td>
+
+            <td>
+                <button type="button" class="btn-black remove-btn">X</button>
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+
+        row.querySelector(".remove-btn").addEventListener("click", () => row.remove());
+    }
+
+    /* ----------------------------------------------------
+       SCAN HANDLER — IDENTICAL TO SALES PAGE
+    ---------------------------------------------------- */
+    barcodeInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+
+            let code = barcodeInput.value.trim();
+            if (!code) return;
+
+            let option = [...productSelect.options].find(o => o.dataset.barcode === code);
+
+            if (option) {
+                addProduct(option.value, option.textContent);
+            }
+
+            barcodeInput.value = "";
+            barcodeInput.placeholder = "";
+
+            setTimeout(() => {
+                barcodeInput.placeholder = "Scan barcode...";
+                focusScanner();
+            }, 10);
+        }
+    });
+
+    /* ----------------------------------------------------
+       Prevent scanner from submitting the form
+    ---------------------------------------------------- */
+    document.getElementById("transfer-form").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+        }
+    });
+
+    document.getElementById("transfer-form").addEventListener("submit", function(e) {
+        if (!e.submitter || e.submitter.id !== "submitTransferBtn") {
+            e.preventDefault();
+        }
+    });
+
+    /* ----------------------------------------------------
+       Manual select
+    ---------------------------------------------------- */
+    productSelect.addEventListener("change", function() {
+        if (this.value) {
+            addProduct(this.value, this.options[this.selectedIndex].textContent);
+            this.value = "";
+        }
+    });
+
+});
+</script>
+
 {% endblock %}
