@@ -11,6 +11,8 @@ from flask import Response, send_file
 import csv
 import pdfkit
 import io
+import time
+
 
 
 
@@ -709,6 +711,110 @@ def records():
 
     return render_template('records.html', records=rows, user=user)
 
+@app.route('/pos', methods=['GET'])
+@require_login
+def pos_page():
+    user = current_user()
+    products = query_all("""
+        SELECT id, name, barcode, retail_price
+        FROM products
+        ORDER BY name
+    """)
+    stores = query_all("SELECT * FROM stores ORDER BY name")
+    return render_template('pos.html', user=user, products=products, stores=stores)
+
+
+
+@app.route('/pos_submit', methods=['POST'])
+@require_login
+def pos_submit():
+    user = current_user()
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    store_id = request.form.get('store_id')
+    client_id = request.form.get('client_id') or None
+
+    cart_product_ids = request.form.getlist('product_id[]')
+    cart_quantities = request.form.getlist('quantity[]')
+    cart_prices = request.form.getlist('price[]')
+    cart_totals = request.form.getlist('line_total[]')
+
+    grand_total = float(request.form.get('grand_total') or 0)
+    payment_method = request.form.get('payment_method')
+    cash_received = float(request.form.get('cash_received') or 0)
+    change_due = float(request.form.get('change_due') or 0)
+
+    # Calculate subtotal and VAT (15%)
+    subtotal = round(grand_total / 1.15, 2)
+    vat = round(grand_total - subtotal, 2)
+
+    # -----------------------------
+    # 1️⃣ Insert sale header (sales table)
+    # -----------------------------
+    cursor.execute("""
+        INSERT INTO sales
+        (invoice_no, client_id, subtotal, vat, total, created_by, store_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (
+        f"INV-{int(time.time())}",  # simple invoice number
+        client_id,
+        subtotal,
+        vat,
+        grand_total,
+        user['id'],
+        store_id
+    ))
+
+    sale_id = cursor.lastrowid
+
+    # -----------------------------
+    # 2️⃣ Insert sale items + stock + movements
+    # -----------------------------
+    for product_id, qty, price, line_total in zip(cart_product_ids, cart_quantities, cart_prices, cart_totals):
+        qty = int(qty)
+
+        # 2.1 Sale line
+        cursor.execute("""
+            INSERT INTO sale_items
+            (sale_id, product_id, quantity, unit_price, total_price)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (sale_id, product_id, qty, price, line_total))
+
+        # 2.2 Update store_stock
+        cursor.execute("""
+            SELECT id, quantity FROM store_stock
+            WHERE product_id=%s AND store_id=%s
+        """, (product_id, store_id))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute("""
+                UPDATE store_stock
+                SET quantity = quantity - %s, updated_by=%s
+                WHERE id=%s
+            """, (qty, user['id'], existing['id']))
+        else:
+            cursor.execute("""
+                INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                VALUES (%s, %s, %s, %s)
+            """, (store_id, product_id, -qty, user['id']))
+
+        # 2.3 Movement log
+        cursor.execute("""
+            INSERT INTO movements
+            (product_id, movement_type, qty, from_store, created_by)
+            VALUES (%s, 'sale', %s, %s, %s)
+        """, (product_id, qty, store_id, user['id']))
+
+    db.commit()
+    cursor.close()
+
+    flash("Sale completed successfully!", "success")
+    return redirect(url_for('pos_page'))
+
+
+
 
 from datetime import datetime
 
@@ -855,6 +961,56 @@ def stock_in():
         flash('Stock received', 'success')
         return redirect(url_for('stock_in'))
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
+@app.route('/stock_in', methods=['GET','POST'])
+@require_login
+def stock_in_page():
+    user = current_user()
+    products = query_all("SELECT * FROM products")
+    stores = query_all("SELECT * FROM stores")
+
+    if request.method == 'POST':
+
+        store_id = request.form.get('store_id')
+
+        product_ids = request.form.getlist('product_id[]')
+        quantities = request.form.getlist('quantity[]')
+
+        for product_id, qty in zip(product_ids, quantities):
+
+            qty = int(qty)
+
+            # 1️⃣ UPDATE STOCK
+            existing = query_one("""
+                SELECT id FROM store_stock 
+                WHERE product_id=%s AND store_id=%s
+            """, (product_id, store_id))
+
+            if existing:
+                execute("""
+                    UPDATE store_stock 
+                    SET quantity = quantity + %s, updated_by=%s 
+                    WHERE id=%s
+                """, (qty, user['id'], existing['id']))
+            else:
+                execute("""
+                    INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                    VALUES (%s, %s, %s, %s)
+                """, (store_id, product_id, qty, user['id']))
+
+            # 2️⃣ MOVEMENT LOG
+            execute("""
+                INSERT INTO movements 
+                (product_id, movement_type, qty, to_store, created_by)
+                VALUES (%s, 'stock_in', %s, %s, %s)
+            """, (product_id, qty, store_id, user['id']))
+
+        flash("Stock-in completed", "success")
+        return redirect(url_for('stock_in_page'))   # ⭐ FIXED
+
+    return render_template('stock_in.html', products=products, stores=stores, user=user)
+
+
 
 # --- Transfer ---
 @app.route('/transfer', methods=['GET','POST'])

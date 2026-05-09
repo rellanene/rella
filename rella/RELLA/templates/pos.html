@@ -1,8 +1,537 @@
 {% extends "base.html" %}
 {% block title %}POS{% endblock %}
 {% block content %}
-<h1>POS</h1>
-<div class="card">
-  <p>POS interface placeholder. Reuse sales logic with simplified UI.</p>
+
+<h1>Point of Sale</h1>
+
+<style>
+    .pos-wrapper {
+        display: grid;
+        grid-template-columns: 2fr 1.2fr;
+        gap: 15px;
+    }
+
+    .pos-panel {
+        background: #ffffff;
+        color: #000;
+        padding: 14px;
+        border-radius: 10px;
+        border: 1px solid #e5e5e5;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .pos-panel h2, .pos-panel h3 {
+        margin-top: 0;
+        font-size: 18px;
+        color: #333;
+        font-weight: 600;
+    }
+
+    .scan-input {
+        width: 100%;
+        padding: 10px;
+        font-size: 15px;
+        border: 2px solid #d4af37;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        background: #fff;
+        color: #000;
+    }
+
+    .small-input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        font-size: 14px;
+        background: #fff;
+        color: #000;
+    }
+
+    .btn-gold {
+        background-color: #d4af37;
+        color: #000;
+        padding: 10px 14px;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .btn-black {
+        background-color: #333;
+        color: #fff;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        background: #fff;
+        color: #000;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    th {
+        background: #f7f7f7;
+        font-weight: 600;
+        border-bottom: 2px solid #e5e5e5;
+        padding: 8px;
+    }
+
+    td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+    }
+
+    .pos-totals {
+        margin-top: 10px;
+        font-size: 16px;
+    }
+
+    .pos-totals div {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        color: #333;
+    }
+
+    .digit-pad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .digit-btn {
+        padding: 14px;
+        font-size: 20px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        background: #fafafa;
+        color: #000;
+        transition: 0.2s;
+    }
+
+    .digit-btn:hover {
+        background: #f0f0f0;
+    }
+
+    .digit-btn.action {
+        background: #d4af37;
+        color: #000;
+        font-weight: bold;
+        border: none;
+    }
+
+    .quick-product-btn {
+        padding: 10px 12px;
+        background: #d4af37;
+        color: #000;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+    }
+</style>
+
+<form method="POST" action="{{ url_for('pos_submit') }}" id="pos-form">
+
+<div class="pos-wrapper">
+
+    <!-- LEFT -->
+    <div class="pos-panel">
+        <h2>Cart</h2>
+
+        <!-- Manual Mode Toggle -->
+        <button type="button" id="toggleFocusBtn" class="btn-black" style="margin-bottom:10px;">
+            Manual Mode: OFF
+        </button>
+
+        <!-- Store -->
+        <label>Store:</label>
+        <select name="store_id" class="scan-input" required>
+            {% for s in stores %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <!-- Client -->
+        <label>Client:</label>
+        <select name="client_id" class="scan-input">
+            <option value="">Walk-in Customer</option>
+            {% for c in clients %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+        </select>
+
+        <!-- Scanner -->
+        <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">
+
+        <!-- Manual Select -->
+        <select id="productSelect" class="scan-input">
+            <option value="">Select product manually</option>
+            {% for p in products %}
+            {% set vat = (p.retail_price * 15 / 115) %}
+            {% set net = p.retail_price - vat %}
+            <option value="{{ p.id }}"
+                    data-barcode="{{ p.barcode }}"
+                    data-price="{{ p.retail_price }}">
+                {{ p.name }} ({{ p.barcode }}) - {{ "%.2f"|format(p.retail_price) }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <!-- Quick Product Buttons -->
+        <div class="pos-panel" style="margin-top:10px;">
+            <h3>Quick Products</h3>
+            <div id="quickProducts" style="display:flex; flex-wrap:wrap; gap:8px;">
+                {% for p in products %}
+                <button type="button"
+                        class="quick-product-btn"
+                        data-id="{{ p.id }}"
+                        data-name="{{ p.name }}"
+                        data-price="{{ p.retail_price }}">
+                    {{ p.name }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Cart Table -->
+        <table id="cartTable">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th style="width:60px;">Qty</th>
+                    <th style="width:80px;">Price</th>
+                    <th style="width:80px;">Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="pos-panel">
+        <h2>Payment</h2>
+
+        <div class="pos-totals">
+            <div>
+                <span>Subtotal (Ex VAT):</span>
+                <span id="subtotalDisplay">0.00</span>
+            </div>
+            <div>
+                <span>VAT (15%):</span>
+                <span id="vatDisplay">0.00</span>
+            </div>
+            <div>
+                <span><strong>Total (Incl VAT):</strong></span>
+                <span id="grandTotalDisplay"><strong>0.00</strong></span>
+            </div>
+        </div>
+
+        <input type="hidden" name="grand_total" id="grandTotalInput">
+        <input type="hidden" name="discount" id="discountInput" value="0">
+
+        <label>Payment method:</label>
+        <select name="payment_method" class="scan-input">
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="eft">EFT</option>
+        </select>
+
+        <label>Cash received:</label>
+        <input type="text" name="cash_received" id="cashReceived" class="small-input" value="0">
+
+        <label>Change due:</label>
+        <input type="text" name="change_due" id="changeDue" class="small-input" value="0" readonly>
+
+        <label style="margin-top:8px;">Digit pad target:</label>
+        <select id="digitTarget" class="small-input">
+            <option value="qty">Selected line qty</option>
+            <option value="cash">Cash received</option>
+            <option value="discount">Discount (amount)</option>
+        </select>
+
+        <div class="digit-pad">
+            <button type="button" class="digit-btn">7</button>
+            <button type="button" class="digit-btn">8</button>
+            <button type="button" class="digit-btn">9</button>
+            <button type="button" class="digit-btn">4</button>
+            <button type="button" class="digit-btn">5</button>
+            <button type="button" class="digit-btn">6</button>
+            <button type="button" class="digit-btn">1</button>
+            <button type="button" class="digit-btn">2</button>
+            <button type="button" class="digit-btn">3</button>
+            <button type="button" class="digit-btn">0</button>
+            <button type="button" class="digit-btn">.</button>
+            <button type="button" class="digit-btn action" id="digitClear">CLR</button>
+        </div>
+
+        <button type="submit" class="btn-gold" style="margin-top:10px;">Complete Sale</button>
+    </div>
+
 </div>
+
+</form>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    const barcodeInput = document.getElementById("barcode-input");
+    const productSelect = document.getElementById("productSelect");
+    const cartTableBody = document.querySelector("#cartTable tbody");
+
+    const subtotalDisplay = document.getElementById("subtotalDisplay");
+    const vatDisplay = document.getElementById("vatDisplay");
+    const grandTotalDisplay = document.getElementById("grandTotalDisplay");
+
+    const grandTotalInput = document.getElementById("grandTotalInput");
+    const discountInput = document.getElementById("discountInput");
+
+    const cashReceived = document.getElementById("cashReceived");
+    const changeDue = document.getElementById("changeDue");
+
+    const digitButtons = document.querySelectorAll(".digit-btn");
+    const digitClear = document.getElementById("digitClear");
+    const digitTarget = document.getElementById("digitTarget");
+
+    let dropdownMode = false;
+    let selectedRow = null;
+    let autoFocusEnabled = true;
+
+    /* -------------------------
+       Manual Mode Toggle
+    ------------------------- */
+    document.getElementById("toggleFocusBtn").addEventListener("click", function () {
+        autoFocusEnabled = !autoFocusEnabled;
+        this.textContent = autoFocusEnabled ? "Manual Mode: OFF" : "Manual Mode: ON";
+        if (autoFocusEnabled) focusScanner();
+    });
+
+    /* -------------------------
+       Focus Engine
+    ------------------------- */
+    function focusScanner() {
+        if (!autoFocusEnabled) return;
+        barcodeInput.focus();
+        barcodeInput.select();
+    }
+
+    focusScanner();
+
+    document.addEventListener("click", function(e) {
+        if (autoFocusEnabled && !dropdownMode && !barcodeInput.contains(e.target)) {
+            focusScanner();
+        }
+    });
+
+    barcodeInput.addEventListener("keyup", function(e) {
+        if (e.key === "Enter") {
+            const code = barcodeInput.value.trim();
+            if (code.length > 0) processScan(code);
+            barcodeInput.value = "";
+            focusScanner();
+        }
+    });
+
+    barcodeInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter" || e.key === "Tab") e.preventDefault();
+    });
+
+    /* -------------------------
+       Totals Calculation
+    ------------------------- */
+    function recalcTotals() {
+        let subtotal = 0;
+        let vatTotal = 0;
+
+        cartTableBody.querySelectorAll("tr").forEach(row => {
+            const lineTotal = parseFloat(row.querySelector(".line-total").textContent) || 0;
+            const net = lineTotal * 100 / 115;
+            const vat = lineTotal * 15 / 115;
+            subtotal += net;
+            vatTotal += vat;
+        });
+
+        const discount = parseFloat(discountInput.value || "0");
+        const grand = Math.max(subtotal + vatTotal - discount, 0);
+
+        subtotalDisplay.textContent = subtotal.toFixed(2);
+        vatDisplay.textContent = vatTotal.toFixed(2);
+        grandTotalDisplay.textContent = grand.toFixed(2);
+        grandTotalInput.value = grand.toFixed(2);
+
+        const cash = parseFloat(cashReceived.value || "0");
+        changeDue.value = Math.max(cash - grand, 0).toFixed(2);
+    }
+
+    /* -------------------------
+       Add / Increment Product
+    ------------------------- */
+    function addOrIncrementProduct(productId, productName, price) {
+
+        let existing = cartTableBody.querySelector(`tr[data-id="${productId}"]`);
+
+        if (existing) {
+            const qtyInput = existing.querySelector(".qty-input");
+            let qty = parseInt(qtyInput.value || "0") + 1;
+            qtyInput.value = qty;
+
+            const lineTotalCell = existing.querySelector(".line-total");
+            lineTotalCell.textContent = (qty * price).toFixed(2);
+
+            existing.querySelector("input[name='quantity[]']").value = qty;
+            existing.querySelector("input[name='line_total[]']").value = (qty * price).toFixed(2);
+
+            recalcTotals();
+            return;
+        }
+
+        const row = document.createElement("tr");
+        row.setAttribute("data-id", productId);
+
+        row.innerHTML = `
+            <td>
+                ${productName}
+                <input type="hidden" name="product_id[]" value="${productId}">
+            </td>
+            <td>
+                <input type="number" class="qty-input small-input" value="1" min="1">
+                <input type="hidden" name="quantity[]" value="1">
+            </td>
+            <td>
+                <span class="price">${price.toFixed(2)}</span>
+                <small style="color:#666;">VAT: ${(price * 15 / 115).toFixed(2)}</small>
+                <input type="hidden" name="price[]" value="${price.toFixed(2)}">
+            </td>
+            <td>
+                <span class="line-total">${price.toFixed(2)}</span>
+                <input type="hidden" name="line_total[]" value="${price.toFixed(2)}">
+            </td>
+            <td>
+                <button type="button" class="btn-black btn-remove">X</button>
+            </td>
+        `;
+
+        cartTableBody.appendChild(row);
+
+        row.addEventListener("click", () => selectedRow = row);
+
+        row.querySelector(".qty-input").addEventListener("input", function() {
+            let qty = parseInt(this.value || "0");
+            if (qty < 1) qty = 1;
+            this.value = qty;
+
+            const priceVal = parseFloat(row.querySelector(".price").textContent);
+            row.querySelector(".line-total").textContent = (qty * priceVal).toFixed(2);
+
+            row.querySelector("input[name='quantity[]']").value = qty;
+            row.querySelector("input[name='line_total[]']").value = (qty * priceVal).toFixed(2);
+
+            recalcTotals();
+        });
+
+        row.querySelector(".btn-remove").addEventListener("click", () => {
+            if (row === selectedRow) selectedRow = null;
+            row.remove();
+            recalcTotals();
+        });
+
+        recalcTotals();
+    }
+
+    /* -------------------------
+       Scanner
+    ------------------------- */
+    function processScan(code) {
+        const option = [...productSelect.options].find(o => o.dataset.barcode === code);
+        if (!option) return;
+        addOrIncrementProduct(option.value, option.textContent, parseFloat(option.dataset.price));
+    }
+
+    /* -------------------------
+       Manual Select
+    ------------------------- */
+    productSelect.addEventListener("change", function() {
+        dropdownMode = true;
+
+        if (this.value) {
+            const opt = this.options[this.selectedIndex];
+            addOrIncrementProduct(opt.value, opt.textContent, parseFloat(opt.dataset.price));
+            this.value = "";
+        }
+
+        dropdownMode = false;
+        focusScanner();
+    });
+
+    /* -------------------------
+       Quick Product Buttons
+    ------------------------- */
+    document.querySelectorAll(".quick-product-btn").forEach(btn => {
+        btn.addEventListener("click", function () {
+            addOrIncrementProduct(
+                this.dataset.id,
+                this.dataset.name,
+                parseFloat(this.dataset.price)
+            );
+        });
+    });
+
+    /* -------------------------
+       Digit Pad
+    ------------------------- */
+    function getTargetInput() {
+        if (digitTarget.value === "cash") return cashReceived;
+        if (digitTarget.value === "discount") return discountInput;
+        if (digitTarget.value === "qty" && selectedRow)
+            return selectedRow.querySelector(".qty-input");
+        return null;
+    }
+
+    digitButtons.forEach(btn => {
+        if (btn === digitClear) return;
+
+        btn.addEventListener("click", () => {
+            const target = getTargetInput();
+            if (!target) return;
+
+            target.value = (target.value || "") + btn.textContent;
+
+            if (target === cashReceived || target === discountInput) recalcTotals();
+            else if (target.classList.contains("qty-input"))
+                target.dispatchEvent(new Event("input"));
+        });
+    });
+
+    digitClear.addEventListener("click", () => {
+        const target = getTargetInput();
+        if (!target) return;
+
+        target.value = "";
+
+        if (target === cashReceived || target === discountInput) recalcTotals();
+        else if (target.classList.contains("qty-input"))
+            target.dispatchEvent(new Event("input"));
+    });
+
+    cashReceived.addEventListener("input", recalcTotals);
+    discountInput.addEventListener("input", recalcTotals);
+
+});
+</script>
+
 {% endblock %}

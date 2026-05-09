@@ -1,21 +1,230 @@
 {% extends "base.html" %}
 {% block title %}Stock In{% endblock %}
 {% block content %}
+
 <h1>Stock In</h1>
-<form method="post" class="add-form">
-  <select name="product_id" required>
-    <option value="">Select product</option>
-    {% for p in products %}
-    <option value="{{ p.id }}">{{ p.name }} ({{ p.barcode }})</option>
-    {% endfor %}
-  </select>
-  <select name="store_id" required>
-    <option value="">Select store</option>
-    {% for s in stores %}
-    <option value="{{ s.id }}">{{ s.name }}</option>
-    {% endfor %}
-  </select>
-  <input name="qty" type="number" min="1" placeholder="Quantity" required>
-  <button type="submit">Receive Stock</button>
+
+<style>
+    .form-wrapper {
+        max-width: 600px;
+        margin: auto;
+    }
+
+    .scan-input {
+        width: 100%;
+        padding: 8px;
+        font-size: 15px;
+        border: 2px solid #d4af37;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .btn-gold {
+        background-color: #d4af37;
+        color: #000;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .btn-black {
+        background-color: #0A1A2F;
+        color: #fff;
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    th, td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #ddd;
+        white-space: nowrap;
+        font-size: 14px;
+    }
+</style>
+
+<div class="form-wrapper">
+
+<form method="POST" id="stockin-form">
+
+    <!-- SCAN BARCODE -->
+    <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">
+
+    <!-- MANUAL SELECT -->
+    <select id="productSelect" class="scan-input">
+        <option value="">Select product manually</option>
+        {% for p in products %}
+        <option value="{{ p.id }}" data-barcode="{{ p.barcode }}">{{ p.name }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- STORE -->
+    <label>Store:</label>
+    <select name="store_id" class="scan-input" required>
+        {% for s in stores %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- TABLE -->
+    <table id="stockinTable">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <button type="submit" class="btn-gold" style="margin-top:15px;">Submit Stock-In</button>
+
 </form>
+
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    const barcodeInput = document.getElementById("barcode-input");
+    const productSelect = document.getElementById("productSelect");
+    const tableBody = document.querySelector("#stockinTable tbody");
+    const form = document.getElementById("stockin-form");
+
+    let dropdownMode = false;
+
+    /* ----------------------------------------------------
+       ALWAYS KEEP BARCODE INPUT FOCUSED (SALES LOGIC)
+    ---------------------------------------------------- */
+    function focusScanner() {
+        barcodeInput.focus();
+        barcodeInput.select();
+    }
+
+    focusScanner();
+
+    document.addEventListener("click", function(e) {
+        if (!dropdownMode && !barcodeInput.contains(e.target)) {
+            focusScanner();
+        }
+    });
+
+    /* ----------------------------------------------------
+       ADD PRODUCT TO TABLE
+    ---------------------------------------------------- */
+    function addProduct(productId, productName) {
+
+        let existing = document.querySelector(`tr[data-id="${productId}"]`);
+
+        if (existing) {
+            let hiddenQty = existing.querySelector("input[name='quantity[]']");
+            let qtyCell = existing.querySelector(".qty");
+
+            let newQty = parseInt(hiddenQty.value) + 1;
+            hiddenQty.value = newQty;
+            qtyCell.textContent = newQty;
+            return;
+        }
+
+        let row = document.createElement("tr");
+        row.setAttribute("data-id", productId);
+
+        row.innerHTML = `
+            <td>
+                ${productName}
+                <input type="hidden" name="product_id[]" value="${productId}">
+            </td>
+
+            <td class="qty">
+                1
+                <input type="hidden" name="quantity[]" value="1">
+            </td>
+
+            <td>
+                <button type="button" class="btn-black remove-btn">X</button>
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+
+        row.querySelector(".remove-btn").addEventListener("click", () => row.remove());
+    }
+
+    /* ----------------------------------------------------
+       PROCESS SCAN (SALES LOGIC)
+    ---------------------------------------------------- */
+    function processScan(code) {
+
+        let option = [...productSelect.options]
+            .find(o => o.dataset.barcode === code);
+
+        if (option) {
+            addProduct(option.value, option.textContent);
+        }
+    }
+
+    /* ----------------------------------------------------
+       ENTER KEY TRIGGERS SCAN (SALES LOGIC)
+    ---------------------------------------------------- */
+    barcodeInput.addEventListener("keyup", function(e) {
+        if (e.key === "Enter") {
+
+            const code = barcodeInput.value.trim();
+
+            if (code.length > 0) {
+                processScan(code);
+            }
+
+            barcodeInput.value = "";
+            focusScanner();
+        }
+    });
+
+    /* ----------------------------------------------------
+       BLOCK ENTER + TAB FROM SUBMITTING (SALES LOGIC)
+    ---------------------------------------------------- */
+    barcodeInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter" || e.key === "Tab") {
+            e.preventDefault();
+        }
+    });
+
+    /* ----------------------------------------------------
+       MANUAL SELECT (SALES LOGIC)
+    ---------------------------------------------------- */
+    productSelect.addEventListener("change", function () {
+        dropdownMode = true;
+
+        if (this.value) {
+            addProduct(this.value, this.options[this.selectedIndex].textContent);
+            this.value = "";
+        }
+
+        dropdownMode = false;
+        focusScanner();
+    });
+
+    /* ----------------------------------------------------
+       BLOCK FORM SUBMIT ON ENTER
+    ---------------------------------------------------- */
+    form.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+        }
+    });
+
+});
+</script>
+
+
 {% endblock %}
