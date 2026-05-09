@@ -166,13 +166,14 @@
         </select>
 
         <!-- Client -->
-        <label>Client:</label>
-        <select name="client_id" class="scan-input">
-            <option value="">Walk-in Customer</option>
-            {% for c in clients %}
-            <option value="{{ c.id }}">{{ c.name }}</option>
-            {% endfor %}
-        </select>
+		<label>Client:</label>
+		<select name="client_id" id="client_id" class="scan-input">
+		    <option value="">Walk-in Customer</option>
+		    {% for c in clients %}
+		        <option value="{{ c.id }}">{{ c.name }}</option>
+		    {% endfor %}
+		</select>
+
 
         <!-- Scanner -->
         <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">

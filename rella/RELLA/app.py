@@ -661,9 +661,31 @@ def sales():
 @require_login
 def pos():
     user = current_user()
-    products = query_all("SELECT * FROM products")
-    stores = query_all("SELECT * FROM stores")
-    return render_template('pos.html', products=products, stores=stores, user=user)
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    # Pull clients
+    cursor.execute("SELECT id, name FROM clients ORDER BY name ASC")
+    clients = cursor.fetchall()
+
+    # Pull products
+    cursor.execute("SELECT * FROM products ORDER BY name ASC")
+    products = cursor.fetchall()
+
+    # Pull stores
+    cursor.execute("SELECT * FROM stores ORDER BY name ASC")
+    stores = cursor.fetchall()
+
+    cursor.close()
+
+    return render_template(
+        'pos.html',
+        clients=clients,
+        products=products,
+        stores=stores,
+        user=user
+    )
+
 
 # --- Records ---
 @app.route('/records')
@@ -725,6 +747,8 @@ def pos_page():
 
 
 
+from datetime import datetime
+
 @app.route('/pos_submit', methods=['POST'])
 @require_login
 def pos_submit():
@@ -745,19 +769,20 @@ def pos_submit():
     cash_received = float(request.form.get('cash_received') or 0)
     change_due = float(request.form.get('change_due') or 0)
 
-    # Calculate subtotal and VAT (15%)
+    # 0️⃣ Generate invoice number (timestamp)
+    invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S")
+
+    # 1️⃣ Calculate subtotal + VAT
     subtotal = round(grand_total / 1.15, 2)
     vat = round(grand_total - subtotal, 2)
 
-    # -----------------------------
-    # 1️⃣ Insert sale header (sales table)
-    # -----------------------------
+    # 2️⃣ Insert sale header
     cursor.execute("""
         INSERT INTO sales
         (invoice_no, client_id, subtotal, vat, total, created_by, store_id)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (
-        f"INV-{int(time.time())}",  # simple invoice number
+        invoice_no,
         client_id,
         subtotal,
         vat,
@@ -766,22 +791,20 @@ def pos_submit():
         store_id
     ))
 
-    sale_id = cursor.lastrowid
+    sale_id = cursor.lastrowid   # ⭐ THIS IS THE REAL INVOICE ID
 
-    # -----------------------------
-    # 2️⃣ Insert sale items + stock + movements
-    # -----------------------------
+    # 3️⃣ Insert sale items + stock + movements
     for product_id, qty, price, line_total in zip(cart_product_ids, cart_quantities, cart_prices, cart_totals):
         qty = int(qty)
 
-        # 2.1 Sale line
+        # 3.1 Sale item
         cursor.execute("""
             INSERT INTO sale_items
             (sale_id, product_id, quantity, unit_price, total_price)
             VALUES (%s, %s, %s, %s, %s)
         """, (sale_id, product_id, qty, price, line_total))
 
-        # 2.2 Update store_stock
+        # 3.2 Update stock
         cursor.execute("""
             SELECT id, quantity FROM store_stock
             WHERE product_id=%s AND store_id=%s
@@ -800,18 +823,23 @@ def pos_submit():
                 VALUES (%s, %s, %s, %s)
             """, (store_id, product_id, -qty, user['id']))
 
-        # 2.3 Movement log
+        # 3.3 Movement log (⭐ now includes invoice_id)
         cursor.execute("""
             INSERT INTO movements
-            (product_id, movement_type, qty, from_store, created_by)
-            VALUES (%s, 'sale', %s, %s, %s)
-        """, (product_id, qty, store_id, user['id']))
+            (product_id, movement_type, qty, from_store, created_by, invoice_id)
+            VALUES (%s, 'sale', %s, %s, %s, %s)
+        """, (product_id, qty, store_id, user['id'], sale_id))
 
     db.commit()
     cursor.close()
 
     flash("Sale completed successfully!", "success")
     return redirect(url_for('pos_page'))
+
+
+
+
+
 
 
 
