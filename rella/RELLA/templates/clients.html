@@ -1,23 +1,68 @@
 {% extends "base.html" %}
 {% block title %}Clients{% endblock %}
 {% block content %}
+
+<style>
+	/* Force hover to override zebra striping */
+	.data-table tbody tr:hover,
+	.data-table tbody tr:hover td {
+	    background-color: #fdf6e3 !important;  /* premium soft cream */
+	}
+    /* Gold/Black Theme Buttons */
+    .btn-gold {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-gold:hover {
+        background-color: #b8952f;
+    }
+
+    .btn-black {
+        background-color: black;
+        color: white;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-black:hover {
+        background-color: #222;
+    }
+</style>
+
 <h1>Clients</h1>
+
+<!-- Search Form -->
 <form method="get" class="search-form">
   <input name="q" placeholder="Search client by name, email or phone" value="{{ request.args.get('q','') }}">
-  <button type="submit">Search</button>
+  <button type="submit" class="btn-black">Search</button>
 </form>
 
+<!-- Add Client Form -->
 <form method="post" class="add-form">
   <h3>Add Client</h3>
   <input name="name" placeholder="Name" required>
   <input name="email" type="email" placeholder="Email">
   <input name="phone" placeholder="Phone">
-  <button type="submit">Add</button>
+  <button type="submit" class="btn-gold">Add</button>
 </form>
 
+<!-- Clients Table -->
 <table class="data-table">
   <thead>
-    <tr><th>Name</th><th>Email</th><th>Phone</th><th>Created At</th><th>Added By</th></tr>
+    <tr>
+      <th>Name</th>
+      <th>Email</th>
+      <th>Phone</th>
+      <th>Created At</th>
+      <th>Added By</th>
+    </tr>
   </thead>
   <tbody>
     {% for c in clients %}
@@ -31,4 +76,5 @@
     {% endfor %}
   </tbody>
 </table>
+
 {% endblock %}

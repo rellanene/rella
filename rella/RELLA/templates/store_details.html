@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ store.name }}{% endblock %}
+{% block content %}
+
+<h1>{{ store.name }} — Stock</h1>
+
+<style>
+.stock-red {
+    background-color: #ffcccc !important;
+    color: #900;
+    font-weight: bold;
+}
+.stock-amber {
+    background-color: #fff4cc !important;
+    color: #b36b00;
+    font-weight: bold;
+}
+.stock-green {
+    background-color: #e6ffcc !important;
+    color: #2d7a00;
+    font-weight: bold;
+}
+
+.btn-black {
+    background-color: black;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn-black:hover {
+    background-color: #222;
+}
+</style>
+
+<!-- Search inside store -->
+<form method="get">
+    <input name="q" placeholder="Search product in this store" value="{{ request.args.get('q','') }}">
+    <button class="btn-black">Search</button>
+</form>
+
+<table class="data-table" style="margin-top:15px;">
+    <thead>
+        <tr>
+            <th>Barcode</th>
+            <th>Name</th>
+            <th>Retail</th>
+            <th>Qty</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for p in products %}
+        {% set cls = "stock-green" %}
+        {% if p.qty <= 20 %}
+            {% set cls = "stock-red" %}
+        {% elif p.qty <= 50 %}
+            {% set cls = "stock-amber" %}
+        {% endif %}
+
+        <tr class="{{ cls }}">
+            <td>{{ p.barcode }}</td>
+            <td>{{ p.name }}</td>
+            <td>{{ p.retail_price }}</td>
+            <td>{{ p.qty }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{{ url_for('stores') }}" class="btn-black" style="margin-top:20px;display:inline-block;">
+    Back to Stores
+</a>
+
+{% endblock %}

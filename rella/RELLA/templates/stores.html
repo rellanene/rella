@@ -2,21 +2,65 @@
 {% block title %}Stores{% endblock %}
 {% block content %}
 <h1>Stores</h1>
+
+<style>
+    /* Gold/Black Theme Buttons */
+    .btn-gold {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-gold:hover {
+        background-color: #b8952f;
+    }
+
+    .btn-black {
+        background-color: black;
+        color: white;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-black:hover {
+        background-color: #222;
+    }
+</style>
+
 <form method="post" class="add-form">
   <input name="name" placeholder="Store name" required>
-  <button type="submit">Add Store</button>
+  <button type="submit" class="btn-gold">Add Store</button>
 </form>
 
 <table class="data-table">
-  <thead><tr><th>Name</th><th>Created At</th><th>Created By</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Created At</th>
+      <th>Created By</th>
+      <th>Open</th>
+    </tr>
+  </thead>
+
   <tbody>
     {% for s in stores %}
     <tr>
       <td>{{ s.name }}</td>
       <td>{{ s.created_at }}</td>
       <td>{{ s.created_by }}</td>
+      <td>
+        <a href="{{ url_for('store_details', store_id=s.id) }}" class="btn-black">
+          Open
+        </a>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
 {% endblock %}

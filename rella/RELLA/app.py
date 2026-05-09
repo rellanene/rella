@@ -461,27 +461,50 @@ def dashboard():
                            total_clients=total_clients, total_sales=total_sales)
 
 # --- Products ---
+# --- Products ---
 @app.route('/products', methods=['GET','POST'])
 @require_login
 def products():
     user = current_user()
+
+    # Add product
     if request.method == 'POST':
-        # add product
         barcode = request.form.get('barcode')
         name = request.form.get('name')
         wholesale = request.form.get('wholesale') or 0
         retail = request.form.get('retail') or 0
-        pid = execute("INSERT INTO products (barcode,name,wholesale_price,retail_price,created_by) VALUES (%s,%s,%s,%s,%s)",
-                      (barcode,name,wholesale,retail,user['id']))
+
+        execute("""
+            INSERT INTO products (barcode, name, wholesale_price, retail_price, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (barcode, name, wholesale, retail, user['id']))
+
         log_action(user['id'], 'add_product', f'Added product {name} ({barcode})')
         flash('Product added', 'success')
         return redirect(url_for('products'))
+
+    # Search
     q = request.args.get('q','')
     if q:
-        rows = query_all("SELECT p.*, IFNULL(SUM(s.quantity),0) as total_qty FROM products p LEFT JOIN store_stock s ON p.id=s.product_id WHERE p.name LIKE %s OR p.barcode LIKE %s GROUP BY p.id", (f'%{q}%', f'%{q}%'))
+        rows = query_all("""
+            SELECT p.*, IFNULL(SUM(s.quantity),0) AS total_qty
+            FROM products p
+            LEFT JOIN store_stock s ON p.id = s.product_id
+            WHERE p.name LIKE %s OR p.barcode LIKE %s
+            GROUP BY p.id
+            ORDER BY p.name ASC
+        """, (f'%{q}%', f'%{q}%'))
     else:
-        rows = query_all("SELECT p.*, IFNULL(SUM(s.quantity),0) as total_qty FROM products p LEFT JOIN store_stock s ON p.id=s.product_id GROUP BY p.id")
+        rows = query_all("""
+            SELECT p.*, IFNULL(SUM(s.quantity),0) AS total_qty
+            FROM products p
+            LEFT JOIN store_stock s ON p.id = s.product_id
+            GROUP BY p.id
+            ORDER BY p.name ASC
+        """)
+
     return render_template('products.html', products=rows, user=user)
+
 
 @app.route('/products/edit/<int:pid>', methods=['POST'])
 @require_login
@@ -968,27 +991,102 @@ def stores():
     return render_template('stores.html', stores=rows, user=user)
 
 # --- Stock in ---
+# --- Stock in ---
+# --- Stock in ---
 @app.route('/stock-in', methods=['GET','POST'])
 @require_login
 def stock_in():
     user = current_user()
     products = query_all("SELECT * FROM products")
     stores = query_all("SELECT * FROM stores")
+
     if request.method == 'POST':
         product_id = request.form.get('product_id')
         store_id = request.form.get('store_id')
-        qty = int(request.form.get('qty',0))
+
+        # ⭐ FIXED: read correct field name
+        qty = int(request.form.get('quantity', 1))
+
         # upsert store_stock
-        existing = query_one("SELECT id FROM store_stock WHERE product_id=%s AND store_id=%s", (product_id, store_id))
+        existing = query_one(
+            "SELECT id FROM store_stock WHERE product_id=%s AND store_id=%s",
+            (product_id, store_id)
+        )
+
         if existing:
-            execute("UPDATE store_stock SET quantity = quantity + %s, updated_by=%s WHERE id=%s", (qty, user['id'], existing['id']))
+            execute(
+                "UPDATE store_stock SET quantity = quantity + %s, updated_by=%s WHERE id=%s",
+                (qty, user['id'], existing['id'])
+            )
         else:
-            execute("INSERT INTO store_stock (store_id,product_id,quantity,updated_by) VALUES (%s,%s,%s,%s)", (store_id,product_id,qty,user['id']))
-        execute("INSERT INTO movements (product_id,movement_type,qty,from_store,to_store,created_by) VALUES (%s,%s,%s,%s,%s,%s)", (product_id,'stock_in',qty,None,store_id,user['id']))
+            execute(
+                "INSERT INTO store_stock (store_id,product_id,quantity,updated_by) VALUES (%s,%s,%s,%s)",
+                (store_id, product_id, qty, user['id'])
+            )
+
+        execute(
+            "INSERT INTO movements (product_id,movement_type,qty,from_store,to_store,created_by) "
+            "VALUES (%s,%s,%s,%s,%s,%s)",
+            (product_id, 'stock_in', qty, None, store_id, user['id'])
+        )
+
         log_action(user['id'], 'stock_in', f'Stock in product {product_id} qty {qty} to store {store_id}')
         flash('Stock received', 'success')
         return redirect(url_for('stock_in'))
+
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
+# --- Store Details ---
+@app.route('/store/<int:store_id>', methods=['GET'])
+@require_login
+def store_details(store_id):
+    user = current_user()
+
+    # Store info
+    store = query_one("SELECT * FROM stores WHERE id=%s", (store_id,))
+    if not store:
+        flash("Store not found", "error")
+        return redirect(url_for('stores'))
+
+    # Search inside store
+    q = request.args.get("q", "")
+
+    if q:
+        products = query_all("""
+            SELECT 
+                p.id,
+                p.name,
+                p.barcode,
+                p.retail_price,
+                COALESCE(ss.quantity, 0) AS qty
+            FROM products p
+            LEFT JOIN store_stock ss 
+                ON ss.product_id = p.id AND ss.store_id = %s
+            WHERE p.name LIKE %s OR p.barcode LIKE %s
+            ORDER BY p.name ASC
+        """, (store_id, f"%{q}%", f"%{q}%"))
+    else:
+        products = query_all("""
+            SELECT 
+                p.id,
+                p.name,
+                p.barcode,
+                p.retail_price,
+                COALESCE(ss.quantity, 0) AS qty
+            FROM products p
+            LEFT JOIN store_stock ss 
+                ON ss.product_id = p.id AND ss.store_id = %s
+            ORDER BY p.name ASC
+        """, (store_id,))
+
+    return render_template(
+        "store_details.html",
+        store=store,
+        products=products,
+        user=user
+    )
+
+
 
 @app.route('/stock_in', methods=['GET','POST'])
 @require_login
