@@ -2005,6 +2005,133 @@ def finances():
         end_date=end_date,
         cashier_id=cashier_id
     )
+@app.route('/finances/reconcile/company')
+@require_login
+def run_company_reconciliation():
+    user = current_user()
+
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    user_id = request.args.get('user_id', '')
+    store_id = request.args.get('store_id', '')
+
+    where = ["1=1"]
+    params = []
+
+    if start_date:
+        where.append("DATE(s.created_at) >= %s")
+        params.append(start_date)
+    if end_date:
+        where.append("DATE(s.created_at) <= %s")
+        params.append(end_date)
+    if user_id:
+        where.append("s.created_by = %s")
+        params.append(user_id)
+    if store_id:
+        where.append("s.store_id = %s")
+        params.append(store_id)
+
+    where_sql = " AND ".join(where)
+
+    totals = query_one(f"""
+        SELECT
+            COALESCE(SUM(s.subtotal), 0) AS subtotal,
+            COALESCE(SUM(s.vat), 0) AS vat,
+            COALESCE(SUM(s.total), 0) AS total
+        FROM sales s
+        WHERE {where_sql}
+    """, params)
+
+    transactions = query_all(f"""
+        SELECT 
+            s.invoice_no,
+            s.subtotal,
+            s.vat,
+            s.total,
+            s.created_at,
+            u.username AS user_name,
+            st.name AS store_name
+        FROM sales s
+        LEFT JOIN users u ON s.created_by = u.id
+        LEFT JOIN stores st ON s.store_id = st.id
+        WHERE {where_sql}
+        ORDER BY s.created_at DESC
+    """, params)
+
+    return render_template(
+        'reconcile_company.html',
+        totals=totals,
+        transactions=transactions,
+        start_date=start_date,
+        end_date=end_date,
+        user=user
+    )
+
+@app.route('/finances/reconcile/user')
+@require_login
+def run_user_reconciliation():
+    user = current_user()
+
+    start_date = request.args.get('start_date', '')
+    end_date = request.args.get('end_date', '')
+    user_id = request.args.get('user_id', '')
+    store_id = request.args.get('store_id', '')
+
+    where = ["1=1"]
+    params = []
+
+    if start_date:
+        where.append("DATE(s.created_at) >= %s")
+        params.append(start_date)
+    if end_date:
+        where.append("DATE(s.created_at) <= %s")
+        params.append(end_date)
+    if user_id:
+        where.append("s.created_by = %s")
+        params.append(user_id)
+    if store_id:
+        where.append("s.store_id = %s")
+        params.append(store_id)
+
+    where_sql = " AND ".join(where)
+
+    # Totals for this cashier
+    totals = query_one(f"""
+        SELECT
+            COALESCE(SUM(s.subtotal), 0) AS subtotal,
+            COALESCE(SUM(s.vat), 0) AS vat,
+            COALESCE(SUM(s.total), 0) AS total
+        FROM sales s
+        WHERE {where_sql}
+    """, params)
+
+    # Transactions for this cashier
+    transactions = query_all(f"""
+        SELECT 
+            s.invoice_no,
+            s.subtotal,
+            s.vat,
+            s.total,
+            s.created_at,
+            u.username AS user_name,
+            st.name AS store_name
+        FROM sales s
+        LEFT JOIN users u ON s.created_by = u.id
+        LEFT JOIN stores st ON s.store_id = st.id
+        WHERE {where_sql}
+        ORDER BY s.created_at DESC
+    """, params)
+
+    return render_template(
+        'reconcile_user.html',
+        totals=totals,
+        transactions=transactions,
+        start_date=start_date,
+        end_date=end_date,
+        user=user
+    )
+
+    
 
 
 # --- Export finances to CSV ---

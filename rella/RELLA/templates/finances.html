@@ -12,6 +12,22 @@
     margin-bottom: 15px;
     background-color: #fafafa;
 }
+.btn-black {
+    background-color: black;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none !important;   /* <-- FIX */
+    display: inline-block;              /* keeps spacing clean */
+}
+.btn-black:hover {
+    background-color: #222;
+    text-decoration: none !important;   /* <-- ensure no underline on hover */
+}
+
 
 .section-header {
     display: flex;
@@ -72,15 +88,17 @@
         <label>End Date:</label>
         <input type="date" name="end_date" value="{{ end_date }}">
 
-        <label>Cashier/User:</label>
-        <select name="cashier_id">
-            <option value="">All</option>
-            {% for c in cashiers %}
-            <option value="{{ c.id }}" {% if cashier_id and cashier_id|int == c.id %}selected{% endif %}>
-                {{ c.name }}
-            </option>
-            {% endfor %}
-        </select>
+		<label>Cashier/User:</label>
+		<select name="user_id">
+		    <option value="">All</option>
+		    {% for u in users_list %}
+		    <option value="{{ u.id }}" 
+		        {% if selected_user_id and selected_user_id|int == u.id %}selected{% endif %}>
+		        {{ u.username }}
+		    </option>
+		    {% endfor %}
+		</select>
+
 
         <button type="submit" class="btn-black">Apply</button>
 
@@ -186,9 +204,29 @@
     <p><strong>Company‑wide reconciliation</strong> uses the same date filters above.</p>
     <p><strong>User/Cashier reconciliation</strong> uses the cashier filter above.</p>
 
-    <button class="btn-black">Run Company Reconciliation</button>
-    <button class="btn-black">Run User/Cashier Reconciliation</button>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
+
+        <a href="{{ url_for('run_company_reconciliation',
+                            start_date=start_date,
+                            end_date=end_date,
+                            user_id=selected_user_id,
+                            store_id=selected_store_id) }}"
+           class="btn-black">
+            Run Company Reconciliation
+        </a>
+
+        <a href="{{ url_for('run_user_reconciliation',
+                            start_date=start_date,
+                            end_date=end_date,
+                            user_id=selected_user_id,
+                            store_id=selected_store_id) }}"
+           class="btn-black">
+            Run User/Cashier Reconciliation
+        </a>
+
+    </div>
 </div>
+
 
 <!-- Raw Records (from records.html logic) -->
 <div class="section-card">
