@@ -450,17 +450,158 @@ def export_movements_csv():
 
 
 # --- Dashboard ---
-@app.route('/')
-@app.route('/dashboard')
-@require_login
+@app.route("/dashboard")
 def dashboard():
-    user = current_user()
-    # sample stats
-    total_products = query_one("SELECT COUNT(*) as c FROM products")['c']
-    total_clients = query_one("SELECT COUNT(*) as c FROM clients")['c']
-    total_sales = query_one("SELECT COUNT(*) as c FROM sales")['c']
-    return render_template('dashboard.html', user=user, total_products=total_products,
-                           total_clients=total_clients, total_sales=total_sales)
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        session.clear()
+        return redirect(url_for("login"))
+
+    role = user["role"]
+
+    # ============================================================
+    # STAFF DASHBOARD
+    # ============================================================
+    if role == "staff":
+
+        cursor.execute("""
+            SELECT 
+                SUM(status='pending') AS pending,
+                SUM(status='in_progress') AS in_progress,
+                SUM(status='completed') AS completed
+            FROM tasks
+            WHERE assigned_to = %s
+        """, (user_id,))
+        row = cursor.fetchone() or {}
+
+        tasks_status_data = [
+            row.get("pending", 0),
+            row.get("in_progress", 0),
+            row.get("completed", 0)
+        ]
+
+        cursor.execute("""
+            SELECT 
+                SUM(priority='low') AS low,
+                SUM(priority='medium') AS medium,
+                SUM(priority='high') AS high
+            FROM tasks
+            WHERE assigned_to = %s
+        """, (user_id,))
+        row = cursor.fetchone() or {}
+
+        tasks_priority_data = [
+            row.get("low", 0),
+            row.get("medium", 0),
+            row.get("high", 0)
+        ]
+
+        return render_template(
+            "dashboard.html",
+            user=user,
+            tasks_status_data=tasks_status_data,
+            tasks_priority_data=tasks_priority_data
+        )
+
+    # ============================================================
+    # ADMIN DASHBOARD
+    # ============================================================
+    else:
+
+        # PRODUCTS
+        cursor.execute("""
+            SELECT name, price
+            FROM products
+            WHERE created_by = %s
+        """, (user_id,))
+        rows = cursor.fetchall() or []
+        products_labels = [r["name"] for r in rows] or ["No products"]
+        products_data = [float(r["price"] or 0) for r in rows] or [0]
+
+        # CLIENTS
+        cursor.execute("""
+            SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS total
+            FROM clients
+            WHERE created_by = %s
+            GROUP BY month
+            ORDER BY month ASC
+            LIMIT 6
+        """, (user_id,))
+        rows = cursor.fetchall() or []
+        clients_labels = [r["month"] for r in rows] or ["No data"]
+        clients_data = [r["total"] for r in rows] or [0]
+
+        # SALES RECORDS
+        cursor.execute("""
+            SELECT DATE(created_at) AS day, SUM(total) AS total
+            FROM sales
+            WHERE created_by = %s
+            GROUP BY day
+            ORDER BY day ASC
+            LIMIT 7
+        """, (user_id,))
+        rows = cursor.fetchall() or []
+        records_labels = [str(r["day"]) for r in rows] or ["No sales"]
+        records_data = [float(r["total"] or 0) for r in rows] or [0]
+
+        # STORES STOCK LEVELS
+        cursor.execute("""
+            SELECT s.name AS store_name, SUM(ss.quantity) AS total_stock
+            FROM store_stock ss
+            JOIN stores s ON s.id = ss.store_id
+            GROUP BY s.name
+        """)
+        rows = cursor.fetchall() or []
+        stores_labels = [r["store_name"] for r in rows] or ["No Stores"]
+        stores_data = [float(r["total_stock"]) for r in rows] or [0.01]  # convert Decimal to float
+        
+        # FINANCES SUMMARY
+        cursor.execute("""
+            SELECT 
+                (SELECT COALESCE(SUM(amount),0) FROM external_entries 
+                 WHERE entry_type='income' AND created_by=%s) AS income,
+                (SELECT COALESCE(SUM(amount),0) FROM external_entries 
+                 WHERE entry_type='expense' AND created_by=%s) AS expenses,
+                (SELECT COALESCE(SUM(cost),0) FROM stock_in 
+                 WHERE created_by=%s) AS stock_cost
+        """, (user_id, user_id, user_id))
+        row = cursor.fetchone() or {}
+        
+        income = float(row.get("income", 0))
+        expenses = float(row.get("expenses", 0))
+        stock_cost = float(row.get("stock_cost", 0))
+        
+        # Chart.js cannot render all-zero pie
+        if income == 0 and expenses == 0 and stock_cost == 0:
+            finances_data = [0.01, 0.01, 0.01]
+        else:
+            finances_data = [income, expenses, stock_cost]
+
+
+
+        return render_template(
+            "dashboard.html",
+            user=user,
+            products_labels=products_labels,
+            products_data=products_data,
+            clients_labels=clients_labels,
+            clients_data=clients_data,
+            records_labels=records_labels,
+            records_data=records_data,
+            stores_labels=stores_labels,
+            stores_data=stores_data,
+            finances_data=finances_data
+        )
+
 
 # --- Products ---
 # --- Products ---
@@ -1267,38 +1408,69 @@ def stock_in():
     if request.method == 'POST':
         product_id = request.form.get('product_id')
         store_id = request.form.get('store_id')
-
-        # ⭐ FIXED: read correct field name
         qty = int(request.form.get('quantity', 1))
 
-        # upsert store_stock
+        # -----------------------------------------
+        # 1️⃣ GET WHOLESALE PRICE FOR COST CALCULATION
+        # -----------------------------------------
+        product = query_one(
+            "SELECT wholesale_price FROM products WHERE id=%s",
+            (product_id,)
+        )
+        wholesale = product['wholesale_price']
+        cost = qty * wholesale
+
+        # -----------------------------------------
+        # 2️⃣ INSERT INTO stock_in TABLE (FINANCE COST)
+        #    ✔ matches your existing DB (no business_id)
+        # -----------------------------------------
+        execute("""
+            INSERT INTO stock_in (product_id, store_id, quantity, cost)
+            VALUES (%s, %s, %s, %s)
+        """, (product_id, store_id, qty, cost))
+
+        # -----------------------------------------
+        # 3️⃣ UPDATE STORE_STOCK (INVENTORY)
+        # -----------------------------------------
         existing = query_one(
             "SELECT id FROM store_stock WHERE product_id=%s AND store_id=%s",
             (product_id, store_id)
         )
 
         if existing:
-            execute(
-                "UPDATE store_stock SET quantity = quantity + %s, updated_by=%s WHERE id=%s",
-                (qty, user['id'], existing['id'])
-            )
+            execute("""
+                UPDATE store_stock
+                SET quantity = quantity + %s, updated_by=%s
+                WHERE id=%s
+            """, (qty, user['id'], existing['id']))
         else:
-            execute(
-                "INSERT INTO store_stock (store_id,product_id,quantity,updated_by) VALUES (%s,%s,%s,%s)",
-                (store_id, product_id, qty, user['id'])
-            )
+            execute("""
+                INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                VALUES (%s, %s, %s, %s)
+            """, (store_id, product_id, qty, user['id']))
 
-        execute(
-            "INSERT INTO movements (product_id,movement_type,qty,from_store,to_store,created_by) "
-            "VALUES (%s,%s,%s,%s,%s,%s)",
-            (product_id, 'stock_in', qty, None, store_id, user['id'])
+        # -----------------------------------------
+        # 4️⃣ INSERT MOVEMENT LOG
+        # -----------------------------------------
+        execute("""
+            INSERT INTO movements (product_id, movement_type, qty, from_store, to_store, created_by)
+            VALUES (%s, 'stock_in', %s, NULL, %s, %s)
+        """, (product_id, qty, store_id, user['id']))
+
+        # -----------------------------------------
+        # 5️⃣ AUDIT LOG
+        # -----------------------------------------
+        log_action(
+            user['id'],
+            'stock_in',
+            f'Stock in product {product_id} qty {qty} to store {store_id}'
         )
 
-        log_action(user['id'], 'stock_in', f'Stock in product {product_id} qty {qty} to store {store_id}')
         flash('Stock received', 'success')
         return redirect(url_for('stock_in'))
 
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
 
 # --- Store Details ---
 @app.route('/store/<int:store_id>', methods=['GET'])
