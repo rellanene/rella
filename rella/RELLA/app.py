@@ -12,6 +12,8 @@ import csv
 import pdfkit
 import io
 import time
+from flask import send_from_directory
+
 
 
 
@@ -814,7 +816,7 @@ def finances_page():
     store_id = request.args.get('store_id', '')
     mode = request.args.get('mode', 'view')   # view or csv
 
-    # Build WHERE clause
+    # Build WHERE clause for sales-based queries
     where = ["1=1"]
     params = []
 
@@ -833,7 +835,7 @@ def finances_page():
 
     where_sql = " AND ".join(where)
 
-    # Base query for records
+    # Base query for sales records
     base_query = f"""
         SELECT 
             s.id,
@@ -852,7 +854,9 @@ def finances_page():
         ORDER BY s.created_at DESC
     """
 
+    # -----------------------------
     # CSV EXPORT MODE
+    # -----------------------------
     if mode == "csv":
         rows = query_all(base_query, params)
 
@@ -879,7 +883,9 @@ def finances_page():
         resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
         return resp
 
+    # -----------------------------
     # NORMAL PAGE VIEW
+    # -----------------------------
     records = query_all(base_query, params)
 
     totals = query_one(f"""
@@ -918,20 +924,111 @@ def finances_page():
     users_list = query_all("SELECT id, username FROM users ORDER BY username")
     stores_list = query_all("SELECT id, name FROM stores ORDER BY name")
 
+    # -----------------------------
+    # BALANCE STATEMENT
+    # -----------------------------
+    assets = query_one("""
+        SELECT COALESCE(SUM(amount),0) AS total
+        FROM external_entries
+        WHERE entry_type='asset'
+    """)['total']
+
+    liabilities = query_one("""
+        SELECT COALESCE(SUM(amount),0) AS total
+        FROM external_entries
+        WHERE entry_type='liability'
+    """)['total']
+
+    equity = assets - liabilities
+
+    # -----------------------------
+    # INCOME STATEMENT
+    # -----------------------------
+    total_sales = query_one("""
+        SELECT COALESCE(SUM(total),0) AS total
+        FROM sales
+    """)['total']
+
+    total_expenses = query_one("""
+        SELECT COALESCE(SUM(amount),0) AS total
+        FROM external_entries
+        WHERE entry_type='expense'
+    """)['total']
+
+    total_stock_in = query_one("""
+        SELECT COALESCE(SUM(cost),0) AS total
+        FROM stock_in
+    """)['total']
+
+    net_income = total_sales - total_expenses - total_stock_in
+
+    # -----------------------------
+    # MANUAL EXTERNAL ENTRIES LIST
+    # -----------------------------
+    external = query_all("""
+        SELECT *
+        FROM external_entries
+        ORDER BY entry_date DESC
+    """)
+
+    # -----------------------------
+    # FINANCIAL RECORDS
+    # -----------------------------
+    records_financial = query_all("""
+        SELECT *
+        FROM records
+        ORDER BY created_at DESC
+    """)
+
+    # -----------------------------
+    # FINANCIAL DOCUMENTS
+    # -----------------------------
+    files = query_all("""
+        SELECT f.*, u.username
+        FROM finance_files f
+        LEFT JOIN users u ON f.uploaded_by = u.id
+        ORDER BY f.uploaded_at DESC
+    """)
+
     return render_template(
         'finances.html',
         user=user,
+
+        # Sales Records
         records=records,
         totals=totals,
         per_user=per_user,
         per_store=per_store,
+
+        # Filters
         users_list=users_list,
         stores_list=stores_list,
         start_date=start_date,
         end_date=end_date,
         selected_user_id=user_id,
-        selected_store_id=store_id
+        selected_store_id=store_id,
+
+        # Balance Statement
+        assets=assets,
+        liabilities=liabilities,
+        equity=equity,
+
+        # Income Statement
+        total_sales=total_sales,
+        total_expenses=total_expenses,
+        total_stock_in=total_stock_in,
+        net_income=net_income,
+
+        # External Entries
+        external=external,
+
+        # Financial Records
+        records_financial=records_financial,
+
+        # Financial Documents
+        files=files
     )
+
 
 
 
@@ -2130,6 +2227,133 @@ def run_user_reconciliation():
         end_date=end_date,
         user=user
     )
+@app.route('/finances/external', methods=['POST'])
+@require_login
+def finances_external():
+    user = current_user()
+
+    # Safely read form fields
+    entry_date = request.form.get('entry_date')
+    description = request.form.get('description')
+    amount = request.form.get('amount')
+    entry_type = request.form.get('entry_type')  # income / expense / adjustment
+
+    # Insert into external_entries table
+    execute("""
+        INSERT INTO external_entries (entry_date, description, amount, entry_type, created_by)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (entry_date, description, amount, entry_type, user['id']))
+
+    # Optional: also insert into records table later if needed
+    # execute("""
+    #     INSERT INTO records (type, description, amount, created_at, user_id, source)
+    #     VALUES (%s, %s, %s, %s, %s, %s)
+    # """, (entry_type, description, amount, entry_date, user['id'], 'external'))
+
+    flash("External financial entry captured successfully.", "success")
+    return redirect(url_for('finances_page'))
+
+
+
+def get_balance_statement():
+    assets = query_one("SELECT COALESCE(SUM(amount),0) AS total FROM external_entries WHERE entry_type='asset'")
+    liabilities = query_one("SELECT COALESCE(SUM(amount),0) AS total FROM external_entries WHERE entry_type='liability'")
+    equity = assets['total'] - liabilities['total']
+    return assets['total'], liabilities['total'], equity
+
+
+def get_income_statement():
+    sales = query_one("SELECT COALESCE(SUM(total),0) AS total FROM sales")
+    expenses = query_one("SELECT COALESCE(SUM(amount),0) AS total FROM external_entries WHERE entry_type='expense'")
+    stock_in = query_one("SELECT COALESCE(SUM(cost),0) AS total FROM stock_in")
+    net_income = sales['total'] - expenses['total'] - stock_in['total']
+    return sales['total'], expenses['total'], stock_in['total'], net_income
+
+
+
+
+
+@app.route('/finances/download/<int:file_id>')
+@require_login
+def finances_download(file_id):
+    user = current_user()
+
+    # Fetch file record
+    f = query_one("SELECT * FROM finance_files WHERE id=%s", (file_id,))
+    if not f:
+        flash("File record not found.", "error")
+        return redirect(url_for('finances_page'))
+
+    # Ensure folder exists
+    os.makedirs("finance_docs", exist_ok=True)
+
+    file_path = os.path.join("finance_docs", f['stored_name'])
+
+    # If file is missing on disk
+    if not os.path.exists(file_path):
+        flash("The file is missing on the server. It may have been deleted.", "error")
+        return redirect(url_for('finances_page'))
+
+    # Serve file
+    return send_from_directory(
+        "finance_docs",
+        f['stored_name'],
+        as_attachment=True,
+        download_name=f['filename']
+    )
+
+    
+@app.route('/finances/export/excel', endpoint='finances_export_excel')
+@require_login
+def finances_export_excel():
+    return finances_export_excel_file()  # if your logic is in another function
+
+@app.route('/finances/balance/export/csv', endpoint='balance_export_csv')
+@require_login
+def balance_export_csv():
+    assets = query_one("SELECT COALESCE(SUM(amount),0) AS total FROM external_entries WHERE entry_type='asset'")
+    liabilities = query_one("SELECT COALESCE(SUM(amount),0) AS total FROM external_entries WHERE entry_type='liability'")
+    equity = assets['total'] - liabilities['total']
+
+    si = StringIO()
+    writer = csv.writer(si)
+    writer.writerow(["Category", "Amount"])
+    writer.writerow(["Total Assets", assets['total']])
+    writer.writerow(["Total Liabilities", liabilities['total']])
+    writer.writerow(["Equity", equity])
+
+    output = si.getvalue()
+    resp = Response(output, mimetype="text/csv")
+    resp.headers["Content-Disposition"] = "attachment; filename=balance_statement.csv"
+    return resp
+
+@app.route('/finances/external/export/csv', endpoint='external_export_csv')
+@require_login
+def external_export_csv():
+    entries = query_all("""
+        SELECT entry_date, description, amount, entry_type
+        FROM external_entries
+        ORDER BY entry_date DESC
+    """)
+
+    si = StringIO()
+    writer = csv.writer(si)
+    writer.writerow(["Date", "Description", "Amount", "Type"])
+
+    for e in entries:
+        writer.writerow([e['entry_date'], e['description'], e['amount'], e['entry_type']])
+
+    output = si.getvalue()
+    resp = Response(output, mimetype="text/csv")
+    resp.headers["Content-Disposition"] = "attachment; filename=external_entries.csv"
+    return resp
+
+os.makedirs("finance_docs", exist_ok=True)
+
+
+
+    
+
 
     
 
@@ -2171,25 +2395,7 @@ def finances_export_pdf():
 
 
 # --- Manual external financial entry ---
-@app.route('/finances/external', methods=['POST'])
-@require_login
-def finances_external():
-    user = current_user()
 
-    entry_date = request.form.get('entry_date')
-    description = request.form.get('description')
-    amount = request.form.get('amount')
-    entry_type = request.form.get('entry_type')  # income / expense / adjustment
-
-    # TODO: insert into records or a dedicated external_finances table
-    # Example:
-    # execute("""
-    #   INSERT INTO records (type, description, amount, created_at, user_id, source)
-    #   VALUES (%s, %s, %s, %s, %s, %s)
-    # """, (entry_type, description, amount, entry_date, user['id'], 'external'))
-
-    flash("External financial entry captured", "success")
-    return redirect(url_for('finances'))
 
 
 # --- File upload for financial docs ---
@@ -2197,32 +2403,22 @@ def finances_external():
 @require_login
 def finances_upload():
     user = current_user()
-    file = request.files.get('file')
+    file = request.files['file']
 
-    if not file:
-        flash("No file selected", "error")
-        return redirect(url_for('finances'))
+    stored_name = f"{int(time.time())}_{file.filename}"
+    file.save(os.path.join("finance_docs", stored_name))
 
-    # TODO: save file to disk or storage, log in DB
-    # path = save_file_somewhere(file)
-    # execute("INSERT INTO finance_files (filename, path, uploaded_by) VALUES (%s,%s,%s)", ...)
+    execute("""
+        INSERT INTO finance_files (filename, stored_name, uploaded_by)
+        VALUES (%s, %s, %s)
+    """, (file.filename, stored_name, user['id']))
 
-    flash("File uploaded", "success")
-    return redirect(url_for('finances'))
+    flash("File uploaded successfully.", "success")
+    return redirect(url_for('finances_page'))
 
 
 # --- Download financial file ---
-@app.route('/finances/files/<int:file_id>/download')
-@require_login
-def finances_download(file_id):
-    user = current_user()
 
-    # TODO: fetch file path from DB and send_file(...)
-    # file = query_one("SELECT * FROM finance_files WHERE id=%s", (file_id,))
-    # return send_file(file['path'], as_attachment=True, download_name=file['filename'])
-
-    flash("Download not yet implemented", "info")
-    return redirect(url_for('finances'))
 
 
 # --- Run ---

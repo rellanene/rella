@@ -20,22 +20,12 @@
     border: none;
     cursor: pointer;
     font-weight: bold;
-    text-decoration: none !important;   /* <-- FIX */
-    display: inline-block;              /* keeps spacing clean */
+    text-decoration: none !important;
+    display: inline-block;
 }
 .btn-black:hover {
     background-color: #222;
-    text-decoration: none !important;   /* <-- ensure no underline on hover */
 }
-
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-
 .btn-gold {
     background-color: #d4af37;
     color: black;
@@ -44,26 +34,16 @@
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
-    font-size: 14px;
 }
 .btn-gold:hover {
     background-color: #b8952f;
 }
-
-.btn-black {
-    background-color: black;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
 }
-.btn-black:hover {
-    background-color: #222;
-}
-
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -88,29 +68,31 @@
         <label>End Date:</label>
         <input type="date" name="end_date" value="{{ end_date }}">
 
-		<label>Cashier/User:</label>
-		<select name="user_id">
-		    <option value="">All</option>
-		    {% for u in users_list %}
-		    <option value="{{ u.id }}" 
-		        {% if selected_user_id and selected_user_id|int == u.id %}selected{% endif %}>
-		        {{ u.username }}
-		    </option>
-		    {% endfor %}
-		</select>
-
+        <label>Cashier/User:</label>
+        <select name="user_id">
+            <option value="">All</option>
+            {% for u in users_list %}
+            <option value="{{ u.id }}" {% if selected_user_id|int == u.id %}selected{% endif %}>
+                {{ u.username }}
+            </option>
+            {% endfor %}
+        </select>
 
         <button type="submit" class="btn-black">Apply</button>
 
-        <!-- CSV / PDF exports using same filters -->
         <a class="btn-gold"
-           href="{{ url_for('finances_export_csv', start_date=start_date, end_date=end_date, cashier_id=cashier_id) }}">
+           href="{{ url_for('finances_export_csv', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}">
             Export CSV
         </a>
-        <a class="btn-gold"
-           href="{{ url_for('finances_export_pdf', start_date=start_date, end_date=end_date, cashier_id=cashier_id) }}">
-            Export PDF
-        </a>
+
+		<a class="btn-gold"
+		   href="{{ url_for('finances_export_excel',
+		                    start_date=start_date,
+		                    end_date=end_date,
+		                    user_id=selected_user_id) }}">
+		    Export Excel
+		</a>
+
     </form>
 </div>
 
@@ -118,30 +100,14 @@
 <div class="section-card">
     <div class="section-header">
         <h3>Balance Statement</h3>
-        <button class="btn-gold">Export to CSV</button>
+        <a class="btn-gold" href="{{ url_for('balance_export_csv') }}">Export to CSV</a>
     </div>
 
-    <!-- You will replace this with real balance sheet logic -->
     <table class="data-table">
-        <thead>
-            <tr>
-                <th>Category</th>
-                <th>Amount</th>
-            </tr>
-        </thead>
         <tbody>
-            <tr>
-                <td>Total Assets</td>
-                <td>R 0.00</td>
-            </tr>
-            <tr>
-                <td>Total Liabilities</td>
-                <td>R 0.00</td>
-            </tr>
-            <tr>
-                <td>Equity</td>
-                <td>R 0.00</td>
-            </tr>
+            <tr><td>Total Assets</td><td>R {{ assets }}</td></tr>
+            <tr><td>Total Liabilities</td><td>R {{ liabilities }}</td></tr>
+            <tr><td>Equity</td><td>R {{ equity }}</td></tr>
         </tbody>
     </table>
 </div>
@@ -150,27 +116,15 @@
 <div class="section-card">
     <div class="section-header">
         <h3>Income Statement</h3>
-        <button class="btn-gold">Export to CSV</button>
+        <a class="btn-gold" href="{{ url_for('finances_export_csv') }}">Export to CSV</a>
     </div>
 
     <table class="data-table">
         <tbody>
-            <tr>
-                <th>Total Sales</th>
-                <td>R {{ totals.total_sales or 0 }}</td>
-            </tr>
-            <tr>
-                <th>Total Expenses</th>
-                <td>R {{ totals.total_expenses or 0 }}</td>
-            </tr>
-            <tr>
-                <th>Stock In (Cost)</th>
-                <td>R {{ totals.total_stock_in or 0 }}</td>
-            </tr>
-            <tr>
-                <th>Net Income (rough)</th>
-                <td>R {{ (totals.total_sales or 0) - (totals.total_expenses or 0) }}</td>
-            </tr>
+            <tr><td>Total Sales</td><td>R {{ total_sales }}</td></tr>
+            <tr><td>Total Expenses</td><td>R {{ total_expenses }}</td></tr>
+            <tr><td>Stock In (Cost)</td><td>R {{ total_stock_in }}</td></tr>
+            <tr><td>Net Income</td><td>R {{ net_income }}</td></tr>
         </tbody>
     </table>
 </div>
@@ -179,7 +133,7 @@
 <div class="section-card">
     <div class="section-header">
         <h3>Manual External Entries</h3>
-        <button class="btn-gold">Export to CSV</button>
+        <a class="btn-gold" href="{{ url_for('external_export_csv') }}">Export to CSV</a>
     </div>
 
     <form method="post" action="{{ url_for('finances_external') }}" style="display:flex;flex-wrap:wrap;gap:8px;">
@@ -193,9 +147,25 @@
         </select>
         <button type="submit" class="btn-black">Add Entry</button>
     </form>
+
+    <table class="data-table" style="margin-top:10px;">
+        <thead>
+            <tr><th>Date</th><th>Description</th><th>Amount</th><th>Type</th></tr>
+        </thead>
+        <tbody>
+            {% for e in external %}
+            <tr>
+                <td>{{ e.entry_date }}</td>
+                <td>{{ e.description }}</td>
+                <td>R {{ e.amount }}</td>
+                <td>{{ e.entry_type }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
-<!-- Reconciliation (Company & User) -->
+<!-- Reconciliation -->
 <div class="section-card">
     <div class="section-header">
         <h3>Reconciliation</h3>
@@ -205,45 +175,26 @@
     <p><strong>User/Cashier reconciliation</strong> uses the cashier filter above.</p>
 
     <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
-
-        <a href="{{ url_for('run_company_reconciliation',
-                            start_date=start_date,
-                            end_date=end_date,
-                            user_id=selected_user_id,
-                            store_id=selected_store_id) }}"
-           class="btn-black">
+        <a href="{{ url_for('run_company_reconciliation', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}" class="btn-black">
             Run Company Reconciliation
         </a>
 
-        <a href="{{ url_for('run_user_reconciliation',
-                            start_date=start_date,
-                            end_date=end_date,
-                            user_id=selected_user_id,
-                            store_id=selected_store_id) }}"
-           class="btn-black">
+        <a href="{{ url_for('run_user_reconciliation', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}" class="btn-black">
             Run User/Cashier Reconciliation
         </a>
-
     </div>
 </div>
 
-
-<!-- Raw Records (from records.html logic) -->
+<!-- Financial Records -->
 <div class="section-card">
     <div class="section-header">
-        <h3>Financial Records (from records)</h3>
-        <button class="btn-gold">Export to CSV</button>
+        <h3>Financial Records</h3>
+        <button class="btn-gold" onclick="toggleRecords()">Expand/Collapse</button>
     </div>
 
-    <table class="data-table">
+    <table id="records-table" class="data-table">
         <thead>
-            <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>User</th>
-            </tr>
+            <tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th><th>User</th></tr>
         </thead>
         <tbody>
             {% for r in records %}
@@ -251,7 +202,7 @@
                 <td>{{ r.created_at }}</td>
                 <td>{{ r.type }}</td>
                 <td>{{ r.description }}</td>
-                <td>{{ r.amount }}</td>
+                <td>R {{ r.amount }}</td>
                 <td>{{ r.user_id }}</td>
             </tr>
             {% endfor %}
@@ -259,7 +210,14 @@
     </table>
 </div>
 
-<!-- File upload / download -->
+<script>
+function toggleRecords() {
+    const t = document.getElementById("records-table");
+    t.style.display = t.style.display === "none" ? "table" : "none";
+}
+</script>
+
+<!-- Financial Documents -->
 <div class="section-card">
     <div class="section-header">
         <h3>Financial Documents</h3>
@@ -270,26 +228,21 @@
         <button type="submit" class="btn-black">Upload</button>
     </form>
 
-    <!-- TODO: list files from finance_files table -->
     <table class="data-table">
         <thead>
-            <tr>
-                <th>File</th>
-                <th>Uploaded By</th>
-                <th>Uploaded At</th>
-                <th>Download</th>
-            </tr>
+            <tr><th>File</th><th>Uploaded By</th><th>Uploaded At</th><th>Download</th></tr>
         </thead>
         <tbody>
-            <!-- Example placeholder row -->
+            {% for f in files %}
             <tr>
-                <td>example.pdf</td>
-                <td>Admin</td>
-                <td>2025-01-01 10:00</td>
+                <td>{{ f.filename }}</td>
+                <td>{{ f.username }}</td>
+                <td>{{ f.uploaded_at }}</td>
                 <td>
-                    <a href="#" class="btn-black">Download</a>
+                    <a href="{{ url_for('finances_download', file_id=f.id) }}" class="btn-black">Download</a>
                 </td>
             </tr>
+            {% endfor %}
         </tbody>
     </table>
 </div>
