@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}User / Cashier Reconciliation{% endblock %}
+{% block content %}
+
+<style>
+.btn-black {
+    background-color: black;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none !important;
+    display: inline-block;
+}
+.btn-black:hover {
+    background-color: #222;
+}
+#print-header {
+    display: none;
+    text-align: center;
+    margin-bottom: 20px;
+}
+@media print {
+    #print-header { display: block; }
+    .no-print { display: none !important; }
+}
+</style>
+
+<!-- PRINT HEADER -->
+<div id="print-header">
+    <h2>User / Cashier Reconciliation</h2>
+    <p id="print-timestamp"></p>
+    <p><strong>User:</strong> {{ user.username }}</p>
+</div>
+
+<h2>User / Cashier Reconciliation</h2>
+
+<p><strong>Period:</strong> {{ start_date }} to {{ end_date }}</p>
+<p><strong>User:</strong> {{ user.username }}</p>
+<p><strong>Generated:</strong> <span id="generated-ts"></span></p>
+
+<!-- Buttons -->
+<div class="no-print" style="display:flex; gap:12px; margin:15px 0; flex-wrap:wrap;">
+    <button class="btn-black" onclick="printRecon()">Print</button>
+
+    <a href="{{ url_for('finances_page') }}" class="btn-black">
+        Back
+    </a>
+</div>
+
+<!-- Totals -->
+<table class="data-table">
+    <tr><th>Total Subtotal</th><td>R {{ "%.2f"|format(totals.subtotal) }}</td></tr>
+    <tr><th>Total VAT</th><td>R {{ "%.2f"|format(totals.vat) }}</td></tr>
+    <tr><th>Total Sales (Incl VAT)</th><td>R {{ "%.2f"|format(totals.total) }}</td></tr>
+</table>
+
+<hr>
+
+<h3>Transactions Included</h3>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Invoice</th>
+            <th>User</th>
+            <th>Store</th>
+            <th>Subtotal</th>
+            <th>VAT</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in transactions %}
+        <tr>
+            <td>{{ r.created_at }}</td>
+            <td>{{ r.invoice_no }}</td>
+            <td>{{ r.user_name }}</td>
+            <td>{{ r.store_name }}</td>
+            <td>R {{ "%.2f"|format(r.subtotal) }}</td>
+            <td>R {{ "%.2f"|format(r.vat) }}</td>
+            <td>R {{ "%.2f"|format(r.total) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<script>
+function printRecon() {
+    const now = new Date().toLocaleString();
+    document.getElementById("print-timestamp").textContent = "Printed on: " + now;
+    window.print();
+}
+
+// Set generated timestamp
+document.getElementById("generated-ts").textContent = new Date().toLocaleString();
+</script>
+
+{% endblock %}
