@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Edit User Profile{% endblock %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2>Edit Profile: {{ profile.username }}</h2>
+
+    <form action="{{ url_for('admin_profile_update', user_id=profile.id) }}" method="post" enctype="multipart/form-data">
+        <div class="hr-form-group">
+            <label>Username</label>
+            <input type="text" name="username" value="{{ profile.username }}">
+        </div>
+
+        <div class="hr-form-group">
+            <label>Email</label>
+            <input type="email" name="email" value="{{ profile.email }}">
+        </div>
+
+        <div class="hr-form-group">
+            <label>Contact</label>
+            <input type="text" name="contact" value="{{ profile.contact }}">
+        </div>
+
+        <div class="hr-form-group">
+            <label>Address</label>
+            <input type="text" name="address" value="{{ profile.address }}">
+        </div>
+
+        <div class="hr-form-group">
+            <label>Qualifications</label>
+            <textarea name="qualifications">{{ profile.qualifications }}</textarea>
+        </div>
+
+        <div class="hr-form-group">
+            <label>Upload Documents</label>
+            <input type="file" name="documents" multiple>
+        </div>
+
+        <button class="hr-btn-primary" type="submit">Save Changes</button>
+    </form>
+
+    <h4 class="mt-4">Existing Documents</h4>
+    <ul>
+        {% for doc in profile_documents %}
+            <li>{{ doc.filename }}</li>
+        {% else %}
+            <li>No documents uploaded.</li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% endblock %}

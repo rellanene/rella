@@ -15,6 +15,16 @@ import time
 from flask import send_from_directory
 
 
+from functools import wraps
+from flask import session, redirect, url_for
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapper
 
 
 
@@ -123,6 +133,11 @@ def generate_invoice_no():
 
 def generate_task_no():
     return ''.join(random.choices(string.digits, k=6))
+
+@app.route("/")
+def home():
+    return redirect(url_for("human"))
+
 
 # --- Auth routes ---
 @app.route('/login', methods=['GET','POST'])
@@ -1691,6 +1706,281 @@ def movements():
     return render_template('movements.html', movements=rows, user=user)
 
 
+@app.post("/hr/overtime/create")
+@login_required
+def staff_overtime_create():
+    db = get_db()
+    cursor = db.cursor()
+    ...
+    cursor.execute(...)
+    db.commit()
+    return redirect(url_for("human"))
+
+
+
+@app.post("/hr/overtime/<int:id>/approve")
+@login_required
+def admin_overtime_approve(id):
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        cursor.execute("UPDATE overtime_requests SET status='approved' WHERE id=%s", (id,))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print("ERROR:", e)
+
+    return redirect(url_for("human"))
+
+
+
+
+
+@app.post("/hr/overtime/admin/create")
+@login_required
+def admin_overtime_create():
+    user_id = request.form["user_id"]
+    date = request.form["date"]
+    hours = request.form["hours"]
+    comment = request.form.get("comment")
+
+    cursor = get_db().cursor()
+    cursor.execute("""
+        INSERT INTO overtime_requests (user_id, date, hours, comment, status)
+        VALUES (%s, %s, %s, %s, 'pending')
+    """, (user_id, date, hours, comment))
+    get_db().commit()
+
+    return redirect(url_for("human"))
+
+#-----------------HRENGINE
+@app.post("/hr/leave/balance/update")
+@login_required
+def admin_leave_balance_update():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    try:
+        user_id = request.form["user_id"]
+
+        cursor.execute("SELECT id FROM leave_categories")
+        categories = cursor.fetchall()
+
+        for cat in categories:
+            cat_id = cat["id"]
+            field = f"leave_{cat_id}"
+            days = request.form.get(field)
+
+            if not days:
+                continue
+
+            days = float(days)
+
+            cursor.execute("""
+                SELECT id FROM leave_balances
+                WHERE user_id=%s AND category_id=%s
+            """, (user_id, cat_id))
+            exists = cursor.fetchone()
+
+            if exists:
+                cursor.execute("""
+                    UPDATE leave_balances
+                    SET days_available=%s
+                    WHERE user_id=%s AND category_id=%s
+                """, (days, user_id, cat_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO leave_balances (user_id, category_id, days_available)
+                    VALUES (%s, %s, %s)
+                """, (user_id, cat_id, days))
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        print("ERROR:", e)
+
+    return redirect(url_for("human"))
+
+
+
+@app.post("/hr/leave/admin/create")
+@login_required
+def admin_leave_create():
+    db = get_db()
+    cursor = db.cursor()
+    ...
+    cursor.execute(...)
+    db.commit()
+    return redirect(url_for("human"))
+
+
+
+
+
+@app.post("/hr/leave/create")
+@login_required
+def staff_leave_create():
+    db = get_db()
+    cursor = db.cursor()
+    ...
+    cursor.execute(...)
+    db.commit()
+    return redirect(url_for("human"))
+
+
+
+@app.post("/hr/leave/<int:id>/approve")
+@login_required
+def admin_leave_approve(id):
+    cursor = get_db().cursor()
+    cursor.execute("UPDATE leave_requests SET status='approved' WHERE id=%s", (id,))
+    get_db().commit()
+    return redirect(url_for("human"))
+
+
+@app.post("/hr/leave/<int:id>/decline")
+@login_required
+def admin_leave_decline(id):
+    cursor = get_db().cursor()
+    cursor.execute("UPDATE leave_requests SET status='declined' WHERE id=%s", (id,))
+    get_db().commit()
+    return redirect(url_for("human"))
+
+
+@app.post("/hr/vacancy/create")
+@login_required
+def admin_vacancy_create():
+    title = request.form["title"]
+    dept = request.form["department"]
+    desc = request.form["description"]
+    closing = request.form["closing_date"]
+
+    cursor = get_db().cursor()
+    cursor.execute("""
+        INSERT INTO job_vacancies (title, department, description, closing_date)
+        VALUES (%s, %s, %s, %s)
+    """, (title, dept, desc, closing))
+    get_db().commit()
+
+    return redirect(url_for("human"))
+
+@app.post("/hr/salary/create")
+@login_required
+def admin_salary_create():
+    data = request.form
+    user_id = data["user_id"]
+
+    basic = float(data["basic_salary"])
+    overtime = float(data.get("overtime_pay", 0))
+    allowances = float(data.get("allowances", 0))
+    deductions = float(data.get("deductions", 0))
+
+    net = basic + overtime + allowances - deductions
+
+    cursor = get_db().cursor()
+    cursor.execute("""
+        INSERT INTO salary_statements 
+        (user_id, period_label, statement_date, basic_salary, overtime_pay, allowances, deductions, net_pay, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        user_id,
+        data["period_label"],
+        data["statement_date"],
+        basic, overtime, allowances, deductions, net,
+        data.get("notes")
+    ))
+    get_db().commit()
+
+    return redirect(url_for("human"))
+@app.post("/hr/payroll/update")
+@login_required
+def admin_payroll_update():
+    rate = request.form["rate_per_hour"]
+    overtime = request.form["overtime_rate_per_hour"]
+
+    cursor = get_db().cursor()
+    cursor.execute("DELETE FROM payroll_settings")
+    cursor.execute("""
+        INSERT INTO payroll_settings (rate_per_hour, overtime_rate_per_hour)
+        VALUES (%s, %s)
+    """, (rate, overtime))
+    get_db().commit()
+
+    return redirect(url_for("human"))
+
+@app.post("/hr/leave/category/create")
+@login_required
+def admin_leave_category_create():
+    name = request.form["name"]
+    cursor = get_db().cursor()
+    cursor.execute("INSERT INTO leave_categories (name) VALUES (%s)", (name,))
+    get_db().commit()
+    return redirect(url_for("human"))
+
+
+@app.post("/hr/leave/category/<int:id>/delete")
+@login_required
+def admin_leave_category_delete(id):
+    cursor = get_db().cursor()
+    cursor.execute("DELETE FROM leave_categories WHERE id=%s", (id,))
+    get_db().commit()
+    return redirect(url_for("human"))
+
+
+@app.post("/hr/profile/update")
+@login_required
+def profile_update():
+    user_id = session["user_id"]
+    data = request.form
+
+    cursor = get_db().cursor()
+    cursor.execute("""
+        UPDATE users SET full_name=%s, email=%s, contact=%s, address=%s, qualifications=%s
+        WHERE id=%s
+    """, (
+        data["full_name"], data["email"], data["contact"],
+        data["address"], data["qualifications"], user_id
+    ))
+
+    # documents
+    files = request.files.getlist("documents")
+    for f in files:
+        if f.filename:
+            filename = secure_filename(f.filename)
+            f.save(os.path.join("uploads/profile_docs", filename))
+            cursor.execute("""
+                INSERT INTO user_documents (user_id, filename, filepath)
+                VALUES (%s, %s, %s)
+            """, (user_id, filename, filename))
+
+    get_db().commit()
+    return redirect(url_for("human"))
+
+
+
+
+@app.post("/hr/vacancy/<int:id>/apply")
+@login_required
+def vacancy_apply(id):
+    user_id = session["user_id"]
+    file = request.files["cv"]
+
+    filename = secure_filename(file.filename)
+    file.save(os.path.join("uploads/cv", filename))
+
+    cursor = get_db().cursor()
+    cursor.execute("""
+        INSERT INTO job_applications (vacancy_id, user_id, cv)
+        VALUES (%s, %s, %s)
+    """, (id, user_id, filename))
+    get_db().commit()
+
+    return redirect(url_for("human"))
+
+
+
 # --- Tasks ---
 @app.route('/tasks', methods=['GET','POST'])
 @require_login
@@ -2203,11 +2493,244 @@ def permissions_page():
     return render_template('permissions.html', users=users, perms=perms, user=user)
 
 # --- Placeholder pages for HR, Comms, Finances, etc. ---
-@app.route('/human')
-@require_login
+@app.route("/human")
+@login_required
 def human():
-    user = current_user()
-    return render_template('human.html', user=user)
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    user_id = session["user_id"]
+
+    # Load logged-in user
+    cursor.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        return redirect(url_for("login"))
+
+    # ============================================================
+    # COMMON DATA FOR BOTH STAFF + ADMIN
+    # ============================================================
+
+    # Leave categories
+    cursor.execute("SELECT * FROM leave_categories ORDER BY name ASC")
+    leave_categories = cursor.fetchall() or []
+
+    # Payroll settings
+    cursor.execute("SELECT * FROM payroll_settings LIMIT 1")
+    payroll = cursor.fetchone() or {
+        "rate_per_hour": 0,
+        "overtime_rate_per_hour": 0
+    }
+
+    # Job vacancies
+    cursor.execute("""
+        SELECT 
+            v.*,
+            (SELECT COUNT(*) FROM job_applications a WHERE a.vacancy_id = v.id) AS applications_count
+        FROM job_vacancies v
+        ORDER BY v.created_at DESC
+    """)
+    vacancies = cursor.fetchall() or []
+
+    # ============================================================
+    # STAFF VIEW
+    # ============================================================
+    if user["role"] == "staff":
+
+        # Staff overtime list
+        cursor.execute("""
+            SELECT * FROM overtime_requests
+            WHERE user_id=%s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        staff_overtime_list = cursor.fetchall() or []
+
+        # Staff leave list
+        cursor.execute("""
+            SELECT lr.*, lc.name AS leave_type_name
+            FROM leave_requests lr
+            JOIN leave_categories lc ON lc.id = lr.category_id
+            WHERE lr.user_id=%s
+            ORDER BY lr.created_at DESC
+        """, (user_id,))
+        staff_leave_list = cursor.fetchall() or []
+
+        # Staff salary statements
+        cursor.execute("""
+            SELECT id, period_label, net_pay, statement_date
+            FROM salary_statements
+            WHERE user_id=%s
+            ORDER BY statement_date DESC
+        """, (user_id,))
+        staff_salary_statements = cursor.fetchall() or []
+
+        # Staff leave balance
+        cursor.execute("""
+            SELECT lb.*, lc.name AS leave_type_name
+            FROM leave_balances lb
+            JOIN leave_categories lc ON lc.id = lb.category_id
+            WHERE lb.user_id=%s
+        """, (user_id,))
+        staff_leave_balance = cursor.fetchall() or []
+
+        # Staff job applications
+        cursor.execute("""
+            SELECT a.*, v.title, v.department, v.closing_date
+            FROM job_applications a
+            JOIN job_vacancies v ON v.id = a.vacancy_id
+            WHERE a.user_id=%s
+        """, (user_id,))
+        staff_applications = cursor.fetchall() or []
+
+        # Staff profile
+        cursor.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+        profile = cursor.fetchone()
+        if profile:
+            profile["full_name"] = profile["username"]
+
+        # Staff documents
+        cursor.execute("SELECT * FROM user_documents WHERE user_id=%s", (user_id,))
+        profile_documents = cursor.fetchall() or []
+
+        return render_template(
+            "human.html",
+            user=user,
+            leave_categories=leave_categories,
+            payroll=payroll,
+            vacancies=vacancies,
+            staff_overtime_list=staff_overtime_list,
+            staff_leave_list=staff_leave_list,
+            staff_salary_statements=staff_salary_statements,
+            staff_leave_balance=staff_leave_balance,
+            staff_applications=staff_applications,
+            profile=profile,
+            profile_documents=profile_documents
+        )
+
+    # ============================================================
+    # ADMIN VIEW
+    # ============================================================
+    else:
+
+        # All users (admin selection)
+        cursor.execute("""
+            SELECT id, username AS full_name, email, contact
+            FROM users
+            ORDER BY username ASC
+        """)
+        users = cursor.fetchall() or []
+
+        # Pending overtime approvals
+        cursor.execute("""
+            SELECT o.*, u.username AS user_name
+            FROM overtime_requests o
+            JOIN users u ON u.id = o.user_id
+            WHERE o.status='pending'
+            ORDER BY o.created_at DESC
+        """)
+        overtime_pending = cursor.fetchall() or []
+
+        # Pending leave approvals
+        cursor.execute("""
+            SELECT lr.*, u.username AS user_name, lc.name AS leave_type_name
+            FROM leave_requests lr
+            JOIN users u ON u.id = lr.user_id
+            JOIN leave_categories lc ON lc.id = lr.category_id
+            WHERE lr.status='pending'
+            ORDER BY lr.created_at DESC
+        """)
+        leave_pending = cursor.fetchall() or []
+
+        # All salary statements
+        cursor.execute("""
+            SELECT s.*, u.username AS user_name
+            FROM salary_statements s
+            JOIN users u ON u.id = s.user_id
+            ORDER BY s.statement_date DESC
+        """)
+        salary_statements = cursor.fetchall() or []
+
+        # Admin does not use staff profile, but template expects variables
+        profile = None
+        profile_documents = []
+
+        return render_template(
+            "human.html",
+            user=user,
+            users=users,
+            leave_categories=leave_categories,
+            payroll=payroll,
+            vacancies=vacancies,
+            overtime_pending=overtime_pending,
+            leave_pending=leave_pending,
+            salary_statements=salary_statements,
+            profile=profile,
+            profile_documents=profile_documents
+        )
+
+@app.post("/hr/overtime/<int:id>/decline")
+@login_required
+def admin_overtime_decline(id):
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        cursor.execute("UPDATE overtime_requests SET status='declined' WHERE id=%s", (id,))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print("ERROR:", e)
+
+    return redirect(url_for("human"))
+
+
+
+
+
+
+
+
+
+
+@app.route("/hr/profile/admin/<int:user_id>/edit")
+@login_required
+def admin_profile_edit(user_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    # Load user being edited
+    cursor.execute("SELECT * FROM users WHERE id=%s", (user_id,))
+    profile = cursor.fetchone()
+
+    if not profile:
+        return redirect(url_for("human"))
+
+    # Load documents
+    cursor.execute("SELECT * FROM user_documents WHERE user_id=%s", (user_id,))
+    profile_documents = cursor.fetchall() or []
+
+    return render_template(
+        "admin_profile_edit.html",
+        profile=profile,
+        profile_documents=profile_documents
+    )
+
+
+@app.post("/hr/profile/admin/<int:user_id>/update")
+@login_required
+def admin_profile_update(user_id):
+    db = get_db()
+    cursor = db.cursor()
+    ...
+    db.commit()
+    return redirect(url_for("human"))
+
+
+
+
+
+
 
 @app.route('/comms')
 @require_login
