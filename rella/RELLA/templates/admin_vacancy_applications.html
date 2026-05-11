@@ -75,8 +75,7 @@
 
 <div class="hr-container">
 
-    <!-- BACK BUTTON -->
-    <a href="{{ url_for('human') }}?tab=vacancies" class="back-btn"> Back to Job Vacancies</a>
+    <a href="{{ url_for('human') }}?tab=vacancies" class="back-btn">Back to Job Vacancies</a>
 
     <h2>Applications for {{ vacancy.title }}</h2>
 
@@ -127,14 +126,28 @@
                 </td>
 
                 <td>
-                    <a href="{{ url_for('admin_update_application', app_id=app.application_id, action='approve') }}" 
-                       class="hr-btn hr-btn-approve">Approve</a>
 
-                    <a href="{{ url_for('admin_update_application', app_id=app.application_id, action='decline') }}" 
-                       class="hr-btn hr-btn-decline">Decline</a>
+                    <!-- APPROVE -->
+                    <form action="{{ url_for('admin_update_application', application_id=app.application_id) }}"
+                          method="post" style="display:inline-block;">
+                        <input type="hidden" name="status" value="approved">
+                        <button type="submit" class="hr-btn hr-btn-approve">Approve</button>
+                    </form>
 
-                    <a href="{{ url_for('admin_update_application', app_id=app.application_id, action='shortlist') }}" 
-                       class="hr-btn hr-btn-shortlist">Shortlist</a>
+                    <!-- DECLINE -->
+                    <form action="{{ url_for('admin_update_application', application_id=app.application_id) }}"
+                          method="post" style="display:inline-block;">
+                        <input type="hidden" name="status" value="declined">
+                        <button type="submit" class="hr-btn hr-btn-decline">Decline</button>
+                    </form>
+
+                    <!-- SHORTLIST -->
+                    <form action="{{ url_for('admin_update_application', application_id=app.application_id) }}"
+                          method="post" style="display:inline-block;">
+                        <input type="hidden" name="status" value="shortlisted">
+                        <button type="submit" class="hr-btn hr-btn-shortlist">Shortlist</button>
+                    </form>
+
                 </td>
             </tr>
             {% endfor %}
@@ -144,5 +157,3 @@
 </div>
 
 {% endblock %}
-
-

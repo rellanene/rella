@@ -1756,28 +1756,53 @@ def staff_overtime_create():
     db.commit()
     return redirect(url_for("human"))
 
-@app.get("/hr/vacancy/admin/<int:vacancy_id>/edit")
+@app.route("/hr/vacancy/admin/<int:vacancy_id>/edit", methods=["GET", "POST"])
 @login_required
 def admin_vacancy_edit(vacancy_id):
     db = get_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM vacancies WHERE id=%s", (vacancy_id,))
+    if request.method == "POST":
+        title = request.form["title"]
+        department = request.form["department"]
+        closing_date = request.form["closing_date"]
+        status = request.form["status"]
+        description = request.form["description"]
+
+        cursor.execute("""
+            UPDATE job_vacancies
+            SET title=%s, department=%s, closing_date=%s, status=%s, description=%s
+            WHERE id=%s
+        """, (title, department, closing_date, status, description, vacancy_id))
+
+        db.commit()
+        return redirect(url_for("human", tab="vacancies"))
+
+    # GET request → load vacancy
+    cursor.execute("SELECT * FROM job_vacancies WHERE id=%s", (vacancy_id,))
     vacancy = cursor.fetchone()
 
     return render_template("admin_vacancy_edit.html", vacancy=vacancy)
 
 
-@app.post("/hr/vacancy/admin/<int:vacancy_id>/delete")
+
+
+
+@app.route("/hr/vacancy/admin/<int:vacancy_id>/delete", methods=["POST"])
 @login_required
 def admin_vacancy_delete(vacancy_id):
     db = get_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
 
-    cursor.execute("DELETE FROM vacancies WHERE id=%s", (vacancy_id,))
+    # Delete linked applications first
+    cursor.execute("DELETE FROM vacancy_applications WHERE vacancy_id=%s", (vacancy_id,))
+    cursor.execute("DELETE FROM job_vacancies WHERE id=%s", (vacancy_id,))
     db.commit()
 
-    return redirect(url_for("human"))
+    flash("Vacancy and all related applications deleted successfully.", "success")
+    return redirect(url_for("human", tab="vacancies"))
+
+
 
 
 
@@ -2123,24 +2148,41 @@ def admin_view_applications(vacancy_id):
                            vacancy=vacancy)
 
 
-@app.get("/admin/application/<int:app_id>/<string:action>")
+@app.route("/admin/application/<int:application_id>/update", methods=["POST"])
 @login_required
-def admin_update_application(app_id, action):
+def admin_update_application(application_id):
     db = get_db()
-    cursor = db.cursor()
+    cursor = db.cursor(dictionary=True)
 
-    if action not in ["approve", "decline", "shortlist"]:
-        return "Invalid action", 400
+    # Match ENUM values from your DB
+    valid_statuses = ["pending", "reviewed", "shortlisted", "declined"]
 
+    # Normalize and validate
+    status = request.form["status"].strip().lower()
+
+    # Map alternate labels if needed
+    if status == "approved":
+        status = "reviewed"
+    elif status == "rejected":
+        status = "declined"
+
+    if status not in valid_statuses:
+        flash("Invalid application status.", "error")
+        return redirect(url_for("human", tab="applications"))
+
+    # Update safely
     cursor.execute("""
         UPDATE vacancy_applications
-        SET status = %s
-        WHERE id = %s
-    """, (action, app_id))
+        SET status=%s
+        WHERE id=%s
+    """, (status, application_id))
 
     db.commit()
+    flash(f"Application {status.capitalize()} successfully.", "success")
+    return redirect(url_for("human", tab="applications"))
 
-    return redirect(request.referrer)
+
+
 
 
 
