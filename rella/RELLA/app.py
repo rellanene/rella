@@ -1,6 +1,6 @@
 # app.py
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, g
 import mysql.connector
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -45,8 +45,24 @@ app.secret_key = SECRET_KEY
 
 # --- DB helper ---
 def get_db():
-    conn = mysql.connector.connect(**DB_CONFIG)
-    return conn
+    if "db" not in g:
+        g.db = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="Clement-88",
+            database="rella",
+            autocommit=False
+        )
+    else:
+        try:
+            # ensure connection is alive BEFORE returning it
+            g.db.ping(reconnect=True, attempts=3, delay=1)
+        except:
+            # if ping fails, reconnect
+            g.db.reconnect(attempts=3, delay=1)
+
+    return g.db
+
 
 def query_one(sql, params=None):
     conn = get_db()
@@ -461,6 +477,22 @@ def export_movements_csv():
     resp.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return resp
 
+def safe_cursor(db, dict=False):
+    try:
+        return db.cursor(dictionary=dict)
+    except:
+        # reconnect only when needed
+        db.reconnect(attempts=3, delay=1)
+        return db.cursor(dictionary=dict)
+
+
+def safe_execute(cursor, query, params=None):
+    try:
+        cursor.execute(query, params)
+    except mysql.connector.errors.ProgrammingError:
+        # reconnect only when needed
+        cursor.connection.reconnect(attempts=3, delay=1)
+        cursor.execute(query, params)
 
 
 
@@ -2722,9 +2754,26 @@ def admin_profile_edit(user_id):
 def admin_profile_update(user_id):
     db = get_db()
     cursor = db.cursor()
-    ...
-    db.commit()
+
+    try:
+        full_name = request.form["full_name"]
+        email = request.form["email"]
+        contact = request.form["contact"]
+
+        cursor.execute("""
+            UPDATE users
+            SET username=%s, email=%s, contact=%s
+            WHERE id=%s
+        """, (full_name, email, contact, user_id))
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        print("ERROR:", e)
+
     return redirect(url_for("human"))
+
 
 
 

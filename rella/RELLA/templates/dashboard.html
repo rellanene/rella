@@ -122,6 +122,13 @@ body.dark-mode #darkModeToggle {
     <!-- ========================================================= -->
 
     <div class="dashboard-grid">
+		
+		<div class="card-box">
+		            <div class="card-title">Stores Stock Levels</div>
+		            <div class="chart-container">
+		                <canvas id="storesChart"></canvas>
+		            </div>
+		        </div>
 
         <div class="card-box">
             <div class="card-title">Products Overview</div>
@@ -129,13 +136,13 @@ body.dark-mode #darkModeToggle {
                 <canvas id="productsChart"></canvas>
             </div>
         </div>
-
-        <div class="card-box">
-            <div class="card-title">Clients Growth</div>
-            <div class="chart-container">
-                <canvas id="clientsChart"></canvas>
-            </div>
-        </div>
+		
+		<div class="card-box">
+		            <div class="card-title">Finances Summary</div>
+		            <div class="chart-container">
+		                <canvas id="financesChart"></canvas>
+		            </div>
+		        </div>        
 
         <div class="card-box">
             <div class="card-title">Sales Records</div>
@@ -143,20 +150,17 @@ body.dark-mode #darkModeToggle {
                 <canvas id="recordsChart"></canvas>
             </div>
         </div>
+		
+		<div class="card-box">
+		            <div class="card-title">Clients Growth</div>
+		            <div class="chart-container">
+		                <canvas id="clientsChart"></canvas>
+		            </div>
+		        </div>
 
-        <div class="card-box">
-            <div class="card-title">Stores Stock Levels</div>
-            <div class="chart-container">
-                <canvas id="storesChart"></canvas>
-            </div>
-        </div>
+        
 
-        <div class="card-box">
-            <div class="card-title">Finances Summary</div>
-            <div class="chart-container">
-                <canvas id="financesChart"></canvas>
-            </div>
-        </div>
+        
 
     </div>
 
