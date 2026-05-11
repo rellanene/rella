@@ -1952,22 +1952,40 @@ def staff_leave_create():
 
 
 
-@app.post("/hr/leave/<int:id>/approve")
+@app.route("/admin/leave/approve/<int:leave_id>", methods=["POST"])
 @login_required
-def admin_leave_approve(id):
-    cursor = get_db().cursor()
-    cursor.execute("UPDATE leave_requests SET status='approved' WHERE id=%s", (id,))
-    get_db().commit()
-    return redirect(url_for("human"))
+def admin_leave_approve(leave_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("""
+        UPDATE leave_requests
+        SET status='approved'
+        WHERE id=%s
+    """, (leave_id,))
+    db.commit()
+
+    flash("Leave request approved successfully.", "success")
+    return redirect(url_for("human", tab="leave"))
 
 
-@app.post("/hr/leave/<int:id>/decline")
+
+@app.route("/admin/leave/decline/<int:leave_id>", methods=["POST"])
 @login_required
-def admin_leave_decline(id):
-    cursor = get_db().cursor()
-    cursor.execute("UPDATE leave_requests SET status='declined' WHERE id=%s", (id,))
-    get_db().commit()
-    return redirect(url_for("human"))
+def admin_leave_decline(leave_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("""
+        UPDATE leave_requests
+        SET status='declined'
+        WHERE id=%s
+    """, (leave_id,))
+    db.commit()
+
+    flash("Leave request declined successfully.", "success")
+    return redirect(url_for("human", tab="leave"))
+
 
 
 @app.post("/hr/vacancy/create")
