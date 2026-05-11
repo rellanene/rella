@@ -1737,16 +1737,27 @@ def movements():
 
     return render_template('movements.html', movements=rows, user=user)
 
-
 @app.post("/hr/overtime/create")
 @login_required
 def staff_overtime_create():
     db = get_db()
     cursor = db.cursor()
-    ...
-    cursor.execute(...)
+
+    user_id = session["user_id"]
+    hours = request.form["hours"]
+    date = request.form["date"]          # <-- user-selected date
+    comment = request.form.get("comment")
+
+    cursor.execute("""
+        INSERT INTO overtime_requests (user_id, hours, comment, date, status)
+        VALUES (%s, %s, %s, %s, 'pending')
+    """, (user_id, hours, comment, date))
+
     db.commit()
     return redirect(url_for("human"))
+
+
+
 
 
 
@@ -1842,10 +1853,18 @@ def admin_leave_balance_update():
 def admin_leave_create():
     db = get_db()
     cursor = db.cursor()
-    ...
-    cursor.execute(...)
+
+    leave_name = request.form["leave_name"]
+    days = request.form["days"]
+
+    cursor.execute("""
+        INSERT INTO leave_categories (name, default_days)
+        VALUES (%s, %s)
+    """, (leave_name, days))
+
     db.commit()
     return redirect(url_for("human"))
+
 
 
 
@@ -1856,10 +1875,31 @@ def admin_leave_create():
 def staff_leave_create():
     db = get_db()
     cursor = db.cursor()
-    ...
-    cursor.execute(...)
+
+    user_id = session["user_id"]
+    category_id = request.form["leave_type"]
+    start_date = request.form["start_date"]
+    end_date = request.form["end_date"]
+    comment = request.form.get("comment")
+    file = request.files.get("attachment")
+
+    file_path = None
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        os.makedirs("uploads/hr", exist_ok=True)
+        file_path = os.path.join("uploads/hr", filename)
+        file.save(file_path)
+
+    cursor.execute("""
+        INSERT INTO leave_requests (user_id, category_id, start_date, end_date, comment, attachment, status)
+        VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+    """, (user_id, category_id, start_date, end_date, comment, file_path))
+
     db.commit()
     return redirect(url_for("human"))
+
+
+
 
 
 
