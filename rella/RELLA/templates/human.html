@@ -38,6 +38,36 @@
 .hr-section.active {
     display: block;
 }
+.hr-btn-primary,
+.hr-btn-secondary,
+.hr-btn-danger {
+    text-decoration: none !important;   /* remove underline */
+    font-weight: bold;                  /* bold text */
+    padding: 8px 14px;                  /* spacing inside button */
+    margin-right: 10px;                 /* space between buttons */
+    display: inline-block;              /* prevents overlap */
+    border-radius: 6px;                 /* curvy buttons */
+}
+
+/* Primary button (View Applications) */
+.hr-btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Secondary button (Edit) */
+.hr-btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Danger button (Delete) */
+.hr-btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+}
+
 
 .hr-card {
     background: #fff;
@@ -638,12 +668,20 @@
                         <td>{{ job.closing_date }}</td>
                         <td>{{ job.status }}</td>
                         <td>{{ job.applications_count }}</td>
-                        <td>
-                            <a href="{{ url_for('admin_vacancy_edit', vacancy_id=job.id) }}" class="hr-btn-secondary">Edit</a>
-                            <form action="{{ url_for('admin_vacancy_delete', vacancy_id=job.id) }}" method="post" style="display:inline-block;">
-                                <button type="submit" class="hr-btn-danger">Delete</button>
-                            </form>
-                        </td>
+						<td>
+						    <a href="{{ url_for('admin_vacancy_edit', vacancy_id=job.id) }}" 
+						       class="hr-btn-secondary">Edit</a>
+
+						    <a href="{{ url_for('admin_view_applications', vacancy_id=job.id) }}" 
+						       class="hr-btn-primary">View Applications</a>
+
+						    <form action="{{ url_for('admin_vacancy_delete', vacancy_id=job.id) }}" 
+						          method="post" style="display:inline-block;">
+						        <button type="submit" class="hr-btn-danger">Delete</button>
+						    </form>
+						</td>
+
+
                     </tr>
                     {% else %}
                     <tr><td colspan="6">No vacancies posted.</td></tr>

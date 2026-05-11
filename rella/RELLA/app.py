@@ -1756,6 +1756,30 @@ def staff_overtime_create():
     db.commit()
     return redirect(url_for("human"))
 
+@app.get("/hr/vacancy/admin/<int:vacancy_id>/edit")
+@login_required
+def admin_vacancy_edit(vacancy_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("SELECT * FROM vacancies WHERE id=%s", (vacancy_id,))
+    vacancy = cursor.fetchone()
+
+    return render_template("admin_vacancy_edit.html", vacancy=vacancy)
+
+
+@app.post("/hr/vacancy/admin/<int:vacancy_id>/delete")
+@login_required
+def admin_vacancy_delete(vacancy_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("DELETE FROM vacancies WHERE id=%s", (vacancy_id,))
+    db.commit()
+
+    return redirect(url_for("human"))
+
+
 
 
 
@@ -2033,23 +2057,119 @@ def profile_update():
 
 
 
-@app.post("/hr/vacancy/<int:id>/apply")
+@app.route("/vacancy/apply/<int:vacancy_id>", methods=["GET", "POST"])
 @login_required
-def vacancy_apply(id):
-    user_id = session["user_id"]
-    file = request.files["cv"]
+def vacancy_apply(vacancy_id):
+    db = get_db()
+    cursor = db.cursor()
 
-    filename = secure_filename(file.filename)
-    file.save(os.path.join("uploads/cv", filename))
-
-    cursor = get_db().cursor()
     cursor.execute("""
-        INSERT INTO job_applications (vacancy_id, user_id, cv)
-        VALUES (%s, %s, %s)
-    """, (id, user_id, filename))
-    get_db().commit()
+        INSERT INTO vacancy_applications (user_id, vacancy_id)
+        VALUES (%s, %s)
+    """, (session["user_id"], vacancy_id))
 
+    db.commit()
     return redirect(url_for("human"))
+@app.get("/admin/vacancies")
+@login_required
+def admin_vacancies():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT 
+            j.id,
+            j.title,
+            j.department,
+            j.closing_date,
+            j.status,
+            COUNT(va.id) AS applications_count
+        FROM job_vacancies j
+        LEFT JOIN vacancy_applications va ON va.vacancy_id = j.id
+        GROUP BY j.id, j.title, j.department, j.closing_date, j.status
+        ORDER BY j.id DESC
+    """)
+    vacancies = cursor.fetchall()
+
+    return render_template("admin_vacancies.html", vacancies=vacancies)
+
+
+@app.get("/admin/vacancy/<int:vacancy_id>/applications")
+@login_required
+def admin_view_applications(vacancy_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT 
+            va.id AS application_id,
+            u.username AS applicant_name,
+            u.email AS applicant_email,
+            va.applied_at,
+            va.status,
+            va.comment
+        FROM vacancy_applications va
+        JOIN users u ON va.user_id = u.id
+        WHERE va.vacancy_id = %s
+        ORDER BY va.applied_at DESC
+    """, (vacancy_id,))
+    applications = cursor.fetchall()
+
+    cursor.execute("SELECT title FROM job_vacancies WHERE id = %s", (vacancy_id,))
+    vacancy = cursor.fetchone()
+
+    return render_template("admin_vacancy_applications.html",
+                           applications=applications,
+                           vacancy=vacancy)
+
+
+@app.get("/admin/application/<int:app_id>/<string:action>")
+@login_required
+def admin_update_application(app_id, action):
+    db = get_db()
+    cursor = db.cursor()
+
+    if action not in ["approve", "decline", "shortlist"]:
+        return "Invalid action", 400
+
+    cursor.execute("""
+        UPDATE vacancy_applications
+        SET status = %s
+        WHERE id = %s
+    """, (action, app_id))
+
+    db.commit()
+
+    return redirect(request.referrer)
+
+
+
+
+@app.get("/admin/vacancy/applications")
+@login_required
+def admin_vacancy_applications():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT 
+            va.id AS application_id,
+            va.applied_at,
+            va.status,
+            c.fullname AS applicant_name,
+            j.title AS vacancy_title
+        FROM vacancy_applications va
+        JOIN clients c ON va.user_id = c.id
+        JOIN job_vacancies j ON va.vacancy_id = j.id
+        ORDER BY va.id DESC
+    """)
+    
+    applications = cursor.fetchall()
+
+    return render_template("admin_vacancy_applications.html", applications=applications)
+
+
+
 
 
 
