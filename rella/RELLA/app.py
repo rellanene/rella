@@ -2015,6 +2015,89 @@ def admin_salary_create():
     get_db().commit()
 
     return redirect(url_for("human"))
+
+@app.route("/admin/salary/<int:statement_id>/edit", methods=["GET", "POST"])
+@login_required
+def admin_salary_edit(statement_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    if request.method == "POST":
+        amount = request.form["amount"]
+        comment = request.form["comment"]
+
+        cursor.execute("""
+            UPDATE salary_statements
+            SET amount=%s, comment=%s
+            WHERE id=%s
+        """, (amount, comment, statement_id))
+        db.commit()
+
+        flash("Salary statement updated successfully.", "success")
+        return redirect(url_for("human", tab="salaries"))
+
+    # GET: load existing data
+    cursor.execute("SELECT * FROM salary_statements WHERE id=%s", (statement_id,))
+    statement = cursor.fetchone()
+    return render_template("admin_salary_edit.html", statement=statement)
+
+
+@app.route("/admin/salary/<int:statement_id>/download")
+@login_required
+def salary_download(statement_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("SELECT document_path FROM salary_statements WHERE id=%s", (statement_id,))
+    row = cursor.fetchone()
+
+    if not row or not row["document_path"]:
+        flash("File not found.", "error")
+        return redirect(url_for("human", tab="salaries"))
+
+    directory = os.path.join(app.root_path, "finance_docs")
+    filename = row["document_path"]
+
+    return send_from_directory(directory, filename, as_attachment=True)
+
+@app.route("/admin/salary/<int:statement_id>/upload", methods=["POST"])
+@login_required
+def salary_upload(statement_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    # Check if a file was uploaded
+    if "file" not in request.files:
+        flash("No file part in the request.", "error")
+        return redirect(url_for("human", tab="salaries"))
+
+    file = request.files["file"]
+
+    if file.filename == "":
+        flash("No file selected.", "error")
+        return redirect(url_for("human", tab="salaries"))
+
+    # Save file securely
+    filename = secure_filename(file.filename)
+    upload_dir = os.path.join(app.root_path, "finance_docs")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file.save(os.path.join(upload_dir, filename))
+
+    # Update database record
+    cursor.execute("""
+        UPDATE salary_statements
+        SET document_path=%s
+        WHERE id=%s
+    """, (filename, statement_id))
+    db.commit()
+
+    flash("Salary document uploaded successfully.", "success")
+    return redirect(url_for("human", tab="salaries"))
+
+
+
+
 @app.post("/hr/payroll/update")
 @login_required
 def admin_payroll_update():
@@ -2041,13 +2124,18 @@ def admin_leave_category_create():
     return redirect(url_for("human"))
 
 
-@app.post("/hr/leave/category/<int:id>/delete")
+@app.route("/admin/leave/category/delete/<int:category_id>", methods=["POST"])
 @login_required
-def admin_leave_category_delete(id):
-    cursor = get_db().cursor()
-    cursor.execute("DELETE FROM leave_categories WHERE id=%s", (id,))
-    get_db().commit()
-    return redirect(url_for("human"))
+def admin_leave_category_delete(category_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute("DELETE FROM leave_categories WHERE id=%s", (category_id,))
+    db.commit()
+
+    flash("Leave category deleted successfully.", "success")
+    return redirect(url_for("human", tab="leave_categories"))
+
 
 
 @app.post("/hr/profile/update")
@@ -3219,34 +3307,24 @@ def get_income_statement():
 
 
 
-@app.route('/finances/download/<int:file_id>')
-@require_login
-def finances_download(file_id):
-    user = current_user()
+@app.route("/finances/download/<int:statement_id>")
+@login_required
+def finances_download(statement_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
 
-    # Fetch file record
-    f = query_one("SELECT * FROM finance_files WHERE id=%s", (file_id,))
-    if not f:
-        flash("File record not found.", "error")
-        return redirect(url_for('finances_page'))
+    cursor.execute("SELECT file_path FROM salary_statements WHERE id=%s", (statement_id,))
+    row = cursor.fetchone()
 
-    # Ensure folder exists
-    os.makedirs("finance_docs", exist_ok=True)
+    if not row or not row["file_path"]:
+        flash("File not found.", "error")
+        return redirect(url_for("human", tab="salaries"))
 
-    file_path = os.path.join("finance_docs", f['stored_name'])
+    directory = os.path.join(app.root_path, "finance_docs")
+    filename = row["file_path"]
 
-    # If file is missing on disk
-    if not os.path.exists(file_path):
-        flash("The file is missing on the server. It may have been deleted.", "error")
-        return redirect(url_for('finances_page'))
+    return send_from_directory(directory, filename, as_attachment=True)
 
-    # Serve file
-    return send_from_directory(
-        "finance_docs",
-        f['stored_name'],
-        as_attachment=True,
-        download_name=f['filename']
-    )
 
     
 @app.route('/finances/export/excel', endpoint='finances_export_excel')

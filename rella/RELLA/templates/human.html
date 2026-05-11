@@ -801,10 +801,22 @@
                         <td>{{ s.period_label }}</td>
                         <td>{{ s.statement_date }}</td>
                         <td>{{ s.net_pay }}</td>
-                        <td>
-                            <a href="{{ url_for('admin_salary_edit', statement_id=s.id) }}" class="hr-btn-secondary">Edit</a>
-                            <a href="{{ url_for('salary_download', statement_id=s.id) }}" class="hr-btn-secondary">View</a>
-                        </td>
+						<td>
+						    <a href="{{ url_for('admin_salary_edit', statement_id=s.id) }}" 
+						       class="hr-btn-secondary">Edit</a>
+
+						    <a href="{{ url_for('salary_download', statement_id=s.id) }}" 
+						       class="hr-btn-secondary">View</a>
+
+						    <form action="{{ url_for('salary_upload', statement_id=s.id) }}" 
+						          method="post" enctype="multipart/form-data" style="display:inline-block;">
+						        <label class="hr-btn-secondary" style="cursor:pointer;">
+						            Upload
+						            <input type="file" name="file" style="display:none;" onchange="this.form.submit()">
+						        </label>
+						    </form>
+						</td>
+
                     </tr>
                     {% else %}
                     <tr><td colspan="5">No salary statements yet.</td></tr>
