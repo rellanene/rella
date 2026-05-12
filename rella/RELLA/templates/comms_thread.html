@@ -102,7 +102,10 @@ function getAttachmentIcon(filename) {
                     document.write(getAttachmentIcon("{{ m.attachment_path }}"));
                 </script>
             </span>
-            <a href="/{{ m.attachment_path }}" target="_blank">Download attachment</a>
+			<a href="{{ url_for('email_download', filename=m.attachment_path.split('/')[-1]) }}">
+			    Download attachment
+			</a>
+
         </div>
         {% endif %}
 

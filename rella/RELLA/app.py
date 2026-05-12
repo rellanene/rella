@@ -2556,6 +2556,19 @@ def comms_email_thread(thread_id):
 
     return render_template("comms_thread.html", messages=messages, subject=subject['subject'], thread_id=thread_id)
 
+@app.route("/email/download/<path:filename>")
+@login_required
+def email_download(filename):
+    directory = os.path.join(app.root_path, "static", "uploads", "email")
+
+    file_path = os.path.join(directory, filename)
+    if not os.path.exists(file_path):
+        flash("Attachment not found.", "error")
+        return redirect(url_for("comms_page"))
+
+    return send_from_directory(directory, filename, as_attachment=True)
+
+
 
 
 
