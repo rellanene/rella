@@ -216,6 +216,10 @@
             <button class="hr-tab-btn" data-target="admin-vacancies">Job Vacancies</button>
             <button class="hr-tab-btn" data-target="admin-salary">Salary Statements</button>
             <button class="hr-tab-btn" data-target="admin-payroll">Payroll & Leave Setup</button>
+			{% if user.role in ['owner', 'admin'] %}
+			<button class="hr-tab-btn" data-target="admin-history">History (Leave & Overtime)</button>
+			{% endif %}
+
             <button class="hr-tab-btn" data-target="admin-profile">User Profiles</button>
         {% endif %}
     </div>
@@ -653,6 +657,7 @@
 	            </tbody>
 	        </table>
 	    </div>
+		
 	</div>
 
     <!-- ========================================================= -->
@@ -939,10 +944,13 @@
             </div>
         </div>
     </div>
+	
+	
 
     <!-- ========================================================= -->
     <!-- ADMIN: USER PROFILES -->
     <!-- ========================================================= -->
+	
     <div id="admin-profile" class="hr-section">
         <div class="hr-card">
             <div class="hr-card-title">User Profiles</div>
@@ -972,23 +980,160 @@
             </table>
         </div>
     </div>
+	<div id="admin-history" class="hr-section">
+
+	    <!-- LEAVE HISTORY -->
+	    <div class="hr-card">
+	        <div class="hr-card-title">Leave History (All Staff)</div>
+
+	        <div class="filters">
+	            <input type="date" id="leave_start">
+	            <input type="date" id="leave_end">
+	            <select id="leave_staff">
+	                <option value="">All Staff</option>
+	                {% for u in users %}
+	                <option value="{{ u.id }}">{{ u.full_name }}</option>
+	                {% endfor %}
+	            </select>
+	            <button class="hr-btn-primary" onclick="loadLeaveHistory()">Filter</button>
+	            <button class="hr-btn-secondary" onclick="printSection('leave_history_table')">Print</button>
+	        </div>
+
+	        <table class="hr-table" id="leave_history_table">
+	            <thead>
+	                <tr>
+	                    <th>Staff</th>
+	                    <th>Leave Type</th>
+	                    <th>Start</th>
+	                    <th>End</th>
+	                    <th>Status</th>
+	                </tr>
+	            </thead>
+	            <tbody id="leave_history_body"></tbody>
+	        </table>
+	    </div>
+
+	    <!-- OVERTIME HISTORY -->
+	    <div class="hr-card">
+	        <div class="hr-card-title">Overtime History (All Staff)</div>
+
+	        <div class="filters">
+	            <input type="date" id="ot_start">
+	            <input type="date" id="ot_end">
+	            <select id="ot_staff">
+	                <option value="">All Staff</option>
+	                {% for u in users %}
+	                <option value="{{ u.id }}">{{ u.full_name }}</option>
+	                {% endfor %}
+	            </select>
+	            <button class="hr-btn-primary" onclick="loadOvertimeHistory()">Filter</button>
+	            <button class="hr-btn-secondary" onclick="printSection('ot_history_table')">Print</button>
+	        </div>
+
+	        <table class="hr-table" id="ot_history_table">
+	            <thead>
+	                <tr>
+	                    <th>Staff</th>
+	                    <th>Date</th>
+	                    <th>Hours</th>
+	                    <th>Status</th>
+	                </tr>
+	            </thead>
+	            <tbody id="ot_history_body"></tbody>
+	        </table>
+	    </div>
+
+	</div>
 
     {% endif %}
+	
+	
+	
 </div>
 
-<script>
-const tabButtons = document.querySelectorAll('.hr-tab-btn');
-const sections = document.querySelectorAll('.hr-section');
 
-tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-target');
-        tabButtons.forEach(b => b.classList.remove('active'));
-        sections.forEach(s => s.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(target).classList.add('active');
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    // TAB SWITCHING
+    const tabButtons = document.querySelectorAll('.hr-tab-btn');
+    const sections = document.querySelectorAll('.hr-section');
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-target');
+            tabButtons.forEach(b => b.classList.remove('active'));
+            sections.forEach(s => s.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(target).classList.add('active');
+            console.log("Switched to tab:", target);
+        });
     });
+
+    // LEAVE HISTORY
+    window.loadLeaveHistory = function () {
+        console.log("Leave history triggered");
+
+        let start = document.getElementById("leave_start").value;
+        let end = document.getElementById("leave_end").value;
+        let staff = document.getElementById("leave_staff").value;
+
+        fetch(`/hr/history/leave?start=${start}&end=${end}&staff_id=${staff}`)
+            .then(r => r.json())
+            .then(data => {
+                console.log("Leave data:", data);
+
+                let body = document.getElementById("leave_history_body");
+                body.innerHTML = "";
+
+                data.rows.forEach(r => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${r.staff_name}</td>
+                            <td>${r.leave_type_name}</td>
+                            <td>${r.start_date}</td>
+                            <td>${r.end_date}</td>
+                            <td>${r.status}</td>
+                        </tr>
+                    `;
+                });
+            });
+    };
+
+    // OVERTIME HISTORY
+    window.loadOvertimeHistory = function () {
+        console.log("Overtime history triggered");
+
+        let start = document.getElementById("ot_start").value;
+        let end = document.getElementById("ot_end").value;
+        let staff = document.getElementById("ot_staff").value;
+
+        fetch(`/hr/history/overtime?start=${start}&end=${end}&staff_id=${staff}`)
+            .then(r => r.json())
+            .then(data => {
+                console.log("Overtime data:", data);
+
+                let body = document.getElementById("ot_history_body");
+                body.innerHTML = "";
+
+                data.rows.forEach(r => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${r.staff_name}</td>
+                            <td>${r.date}</td>
+                            <td>${r.hours}</td>
+                            <td>${r.status}</td>
+                        </tr>
+                    `;
+                });
+            });
+    };
+
 });
 </script>
+
+
+
 
 {% endblock %}

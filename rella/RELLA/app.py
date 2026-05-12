@@ -1756,6 +1756,120 @@ def staff_overtime_create():
     db.commit()
     return redirect(url_for("human"))
 
+@app.route("/hr/history/leave")
+@login_required
+def hr_history_leave():
+    user_id = session["user_id"]
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    staff_id = request.args.get("staff_id")
+
+    sql = """
+        SELECT 
+            l.id,
+            u.username AS staff_name,
+            c.name AS leave_type_name,
+            l.start_date,
+            l.end_date,
+            l.status
+        FROM leave_requests l
+        JOIN users u ON u.id = l.user_id
+        LEFT JOIN leave_categories c ON c.id = l.category_id
+        WHERE 1=1
+    """
+    params = []
+
+    # Only apply staff filter if provided
+    if staff_id and staff_id.strip() != "":
+        sql += " AND l.user_id = %s"
+        params.append(staff_id)
+
+    # Only apply date filters if valid
+    if start and start.strip() != "":
+        sql += " AND l.start_date >= %s"
+        params.append(start)
+
+    if end and end.strip() != "":
+        sql += " AND l.end_date <= %s"
+        params.append(end)
+
+    sql += " ORDER BY l.start_date DESC"
+
+    cursor.execute(sql, params)
+    rows = cursor.fetchall()
+
+    print("LEAVE DEBUG:", rows)
+    return jsonify({"rows": rows})
+
+
+
+
+
+
+
+
+
+
+
+@app.route("/hr/history/overtime")
+@login_required
+def hr_history_overtime():
+    user_id = session["user_id"]
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    staff_id = request.args.get("staff_id")
+
+    sql = """
+        SELECT 
+            o.id,
+            u.username AS staff_name,
+            o.date,
+            o.hours,
+            o.status
+        FROM overtime_requests o
+        JOIN users u ON u.id = o.user_id
+        WHERE 1=1
+    """
+    params = []
+
+    if staff_id and staff_id.strip() != "":
+        sql += " AND o.user_id = %s"
+        params.append(staff_id)
+
+    if start and start.strip() != "":
+        sql += " AND o.date >= %s"
+        params.append(start)
+
+    if end and end.strip() != "":
+        sql += " AND o.date <= %s"
+        params.append(end)
+
+    sql += " ORDER BY o.date DESC"
+
+    cursor.execute(sql, params)
+    rows = cursor.fetchall()
+
+    print("OVERTIME DEBUG:", rows)
+    return jsonify({"rows": rows})
+
+
+
+
+
+
+
+
+
+
+
 @app.route("/hr/vacancy/admin/<int:vacancy_id>/edit", methods=["GET", "POST"])
 @login_required
 def admin_vacancy_edit(vacancy_id):
@@ -3045,11 +3159,23 @@ def admin_overtime_decline(id):
     return redirect(url_for("human"))
 
 
+@app.context_processor
+def inject_all_staff():
+    user = session.get("user")
 
+    # Only owner should see staff list
+    if not user or user.get("role") != "owner":
+        return {"all_staff": []}
 
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, name FROM users WHERE business_id=%s ORDER BY name ASC",
+        (user["business_id"],)
+    )
+    staff = cursor.fetchall()
 
-
-
+    return {"all_staff": staff}
 
 
 
