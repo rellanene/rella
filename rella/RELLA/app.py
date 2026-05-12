@@ -3325,23 +3325,22 @@ def get_income_statement():
 
 
 
-@app.route("/finances/download/<int:statement_id>")
+@app.route("/finances/download/<int:file_id>")
 @login_required
-def finances_download(statement_id):
+def finances_download(file_id):
     db = get_db()
     cursor = db.cursor(dictionary=True)
 
-    cursor.execute("SELECT file_path FROM salary_statements WHERE id=%s", (statement_id,))
+    cursor.execute("SELECT document_path FROM salary_statements WHERE id=%s", (file_id,))
     row = cursor.fetchone()
 
-    if not row or not row["file_path"]:
+    if not row or not row["document_path"]:
         flash("File not found.", "error")
-        return redirect(url_for("human", tab="salaries"))
+        return redirect(url_for("human", tab="finances"))
 
     directory = os.path.join(app.root_path, "finance_docs")
-    filename = row["file_path"]
+    return send_from_directory(directory, row["document_path"], as_attachment=True)
 
-    return send_from_directory(directory, filename, as_attachment=True)
 
 
     
