@@ -17,16 +17,22 @@
 .btn-black:hover {
     background-color: #222;
 }
+
 #print-header {
     display: none;
     text-align: center;
     margin-bottom: 20px;
 }
+
+/* HIDE NAVBAR WHEN PRINTING */
 @media print {
     #print-header { display: block; }
-    .no-print { display: none !important; }
+    nav, .navbar, #navbar, header, .no-print {
+        display: none !important;
+    }
 }
 </style>
+
 
 <!-- PRINT HEADER -->
 <div id="print-header">

@@ -2372,6 +2372,7 @@ def tasks():
 
 
     return render_template('tasks.html', tasks=rows, users=users, user=user)
+
 @app.route('/tasks/<int:task_id>')
 @require_login
 def task_view(task_id):
@@ -2491,6 +2492,12 @@ def my_tasks():
     users = query_all("SELECT id, username FROM users WHERE is_active=1 AND is_approved=1")
 
     return render_template("tasks.html", users=users, tasks=rows)
+
+@app.route("/uploads/tasks/<path:filename>")
+def download_task_file(filename):
+    directory = os.path.join(app.root_path, "uploads", "tasks")
+    return send_from_directory(directory, filename, as_attachment=True)
+
 
 #--------Comms main page
 import os
