@@ -3420,23 +3420,73 @@ os.makedirs("finance_docs", exist_ok=True)
 
 
 # --- Export finances to CSV ---
-@app.route('/finances/export/csv')
+@app.route("/finances/export/csv")
 @require_login
 def finances_export_csv():
-    user = current_user()
-    start_date = request.args.get('start_date', '')
-    end_date = request.args.get('end_date', '')
-    cashier_id = request.args.get('cashier_id', '')
+    from datetime import datetime
+    start_date = request.args.get("start_date") or None
+    end_date = request.args.get("end_date") or None
+    user_id = request.args.get("user_id") or None
 
-    # TODO: reuse same filter logic as /finances
-    # Build CSV from records
-    # Return Response with proper headers
-    # filename should include timestamp
-    # e.g. finances_2025-01-01_2025-01-31_20250130-153000.csv
+    # Default date range if empty
+    if not start_date:
+        start_date = "1900-01-01"
+    if not end_date:
+        end_date = datetime.today().strftime("%Y-%m-%d")
 
-    # Placeholder
-    flash("CSV export not yet implemented", "info")
-    return redirect(url_for('finances'))
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    sql = """
+        SELECT s.created_at, s.invoice_no, u.username AS user_name,
+               st.name AS store_name, s.subtotal, s.vat, s.total
+        FROM sales s
+        LEFT JOIN users u ON s.created_by = u.id
+        LEFT JOIN stores st ON s.store_id = st.id
+        WHERE DATE(s.created_at) BETWEEN %s AND %s
+    """
+    params = [start_date, end_date]
+
+    if user_id:
+        sql += " AND s.created_by = %s"
+        params.append(user_id)
+
+    sql += " ORDER BY s.created_at DESC"
+
+    cursor.execute(sql, params)
+    rows = cursor.fetchall()
+
+    # Build CSV
+    import csv
+    from io import StringIO
+    output = StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["Date", "Invoice", "User", "Store", "Subtotal", "VAT", "Total"])
+
+    for r in rows:
+        writer.writerow([
+            r["created_at"],
+            r["invoice_no"],
+            r["user_name"],
+            r["store_name"],
+            "%.2f" % r["subtotal"],
+            "%.2f" % r["vat"],
+            "%.2f" % r["total"]
+        ])
+
+    output.seek(0)
+
+    # ✅ Add date & time stamp to filename
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"finances_{start_date}_to_{end_date}_{timestamp}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 
 # --- Export finances to PDF ---
