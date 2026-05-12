@@ -3351,15 +3351,21 @@ def finances_download(file_id):
     db = get_db()
     cursor = db.cursor(dictionary=True)
 
-    cursor.execute("SELECT document_path FROM salary_statements WHERE id=%s", (file_id,))
+    cursor.execute("SELECT stored_name, filename FROM finance_files WHERE id=%s", (file_id,))
     row = cursor.fetchone()
 
-    if not row or not row["document_path"]:
+    if not row:
         flash("File not found.", "error")
         return redirect(url_for("human", tab="finances"))
 
     directory = os.path.join(app.root_path, "finance_docs")
-    return send_from_directory(directory, row["document_path"], as_attachment=True)
+    return send_from_directory(
+        directory,
+        row["stored_name"],
+        as_attachment=True,
+        download_name=row["filename"]
+    )
+
 
 
 
@@ -3486,6 +3492,97 @@ def finances_export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+    
+@app.route('/finances/balance/export/csv', endpoint='finances_balance_export_csv_final')
+@require_login
+def finances_balance_export_csv_final():
+    from datetime import datetime
+    import csv
+    from io import StringIO
+
+    start_date = request.args.get('start_date') or "1900-01-01"
+    end_date = request.args.get('end_date') or datetime.today().strftime("%Y-%m-%d")
+    cashier_id = request.args.get('cashier_id') or None
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    sql = """
+        SELECT s.created_at, s.invoice_no, u.username AS user_name,
+               st.name AS store_name, s.subtotal, s.vat, s.total
+        FROM sales s
+        LEFT JOIN users u ON s.created_by = u.id
+        LEFT JOIN stores st ON s.store_id = st.id
+        WHERE DATE(s.created_at) BETWEEN %s AND %s
+    """
+    params = [start_date, end_date]
+
+    if cashier_id:
+        sql += " AND s.created_by = %s"
+        params.append(cashier_id)
+
+    sql += " ORDER BY s.created_at DESC"
+    cursor.execute(sql, params)
+    rows = cursor.fetchall()
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Date", "Invoice", "User", "Store", "Subtotal", "VAT", "Total"])
+
+    for r in rows:
+        writer.writerow([
+            r["created_at"],
+            r["invoice_no"],
+            r["user_name"],
+            r["store_name"],
+            "%.2f" % r["subtotal"],
+            "%.2f" % r["vat"],
+            "%.2f" % r["total"]
+        ])
+
+    output.seek(0)
+
+    # ⭐ Guaranteed timestamp logic
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"balance_statement_{start_date}_to_{end_date}_{timestamp}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+    
+    
+@app.route('/finances/income/export/csv', endpoint='income_export_csv')
+@require_login
+def income_export_csv():
+    from datetime import datetime
+    import csv
+    from io import StringIO
+
+    # Fetch values
+    sales = query_one("SELECT COALESCE(SUM(total),0) AS total FROM sales")
+    expenses = query_one("SELECT COALESCE(SUM(amount),0) AS total FROM external_entries WHERE entry_type='expense'")
+    stock_in = query_one("SELECT COALESCE(SUM(cost),0) AS total FROM stock_in")
+
+    net_income = sales['total'] - expenses['total'] - stock_in['total']
+
+    si = StringIO()
+    writer = csv.writer(si)
+    writer.writerow(["Category", "Amount"])
+    writer.writerow(["Total Sales", sales['total']])
+    writer.writerow(["Total Expenses", expenses['total']])
+    writer.writerow(["Stock In (Cost)", stock_in['total']])
+    writer.writerow(["Net Income", net_income])
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"income_statement_{timestamp}.csv"
+
+    resp = Response(si.getvalue(), mimetype="text/csv")
+    resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return resp
+    
 
 
 
