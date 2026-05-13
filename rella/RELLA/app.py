@@ -3254,30 +3254,58 @@ def admin_profile_edit(user_id):
     )
 
 
-@app.post("/hr/profile/admin/<int:user_id>/update")
-@login_required
+@app.route('/hr/profile/admin/<int:user_id>/update', methods=['POST'])
 def admin_profile_update(user_id):
     db = get_db()
     cursor = db.cursor()
 
-    try:
-        full_name = request.form["full_name"]
-        email = request.form["email"]
-        contact = request.form["contact"]
+    # Read form fields
+    username = request.form.get('username')
+    email = request.form.get('email')
+    contact = request.form.get('contact')
+    address = request.form.get('address')
+    qualifications = request.form.get('qualifications')
 
-        cursor.execute("""
-            UPDATE users
-            SET username=%s, email=%s, contact=%s
-            WHERE id=%s
-        """, (full_name, email, contact, user_id))
+    # Update user
+    cursor.execute("""
+        UPDATE users
+        SET username=%s, email=%s, contact=%s, address=%s, qualifications=%s
+        WHERE id=%s
+    """, (username, email, contact, address, qualifications, user_id))
 
-        db.commit()
+    # Handle file uploads
+    upload_dir = os.path.join("uploads")
+    os.makedirs(upload_dir, exist_ok=True)
 
-    except Exception as e:
-        db.rollback()
-        print("ERROR:", e)
+    files = request.files.getlist('documents')
+    for f in files:
+        if f.filename:
+            filepath = os.path.join(upload_dir, f.filename)
+            f.save(filepath)
+            cursor.execute("""
+                INSERT INTO user_documents (user_id, filename, filepath)
+                VALUES (%s, %s, %s)
+            """, (user_id, f.filename, filepath))
 
-    return redirect(url_for("human"))
+    db.commit()
+
+    # ⭐ THIS LINE IS THE FIX ⭐
+    return redirect(url_for('human'))
+
+from flask import send_from_directory
+import os
+
+@app.route('/hr/profile/download/<filename>')
+def download_document(filename):
+    upload_dir = os.path.join("uploads")  # same folder where you save files
+    return send_from_directory(upload_dir, filename, as_attachment=True)
+
+
+    db.commit()
+    flash("Profile updated successfully!", "success")
+    return redirect(url_for('human'))
+
+
 
 
 

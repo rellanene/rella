@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="hr-card" style="max-width:700px; margin:60px auto; padding:30px; text-align:center;">
+
+    <div class="hr-card-title" style="font-size:22px; font-weight:600; margin-bottom:25px; color:#111;">
+        Leave Balance for {{ selected_user.username }}
+    </div>
+    <div style="margin-bottom:10px; font-size:13px; color:#666;">
+    Debug: selected_user.id = {{ selected_user.id }}, username = {{ selected_user.username }}
+</div>
+    
+
+    <table class="hr-table" style="width:100%; border-collapse:collapse; margin:auto;">
+        <thead>
+            <tr style="background-color:#f4c542; color:#111;">
+                <th style="padding:10px; font-weight:700;">Leave Category</th>
+                <th style="padding:10px; font-weight:700;">Days Available</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in balances %}
+            <tr style="border-bottom:1px solid #ddd;">
+                <td style="padding:12px 10px;">{{ b.category_name }}</td>
+                <td style="padding:12px 10px;">
+                    <span style="background-color:#111; color:#f4c542; padding:6px 14px; border-radius:6px; font-weight:600;">
+                        {{ b.days_available }}
+                    </span>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="2" style="padding:20px; text-align:center;">No leave balances found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top:35px;">
+        <button onclick="window.location.href='{{ url_for('human') }}'"
+                style="background-color:#f4c542; color:#111; font-weight:700; border:none; padding:10px 25px; border-radius:6px; cursor:pointer;">
+            Back
+        </button>
+    </div>
+
+</div>
+
+{% endblock %}
