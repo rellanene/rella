@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Inline Salary Editor{% endblock %}
+{% block content %}
+
+<style>
+    /* Container + Title */
+    .inline-title {
+        color: #b8860b;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+
+    /* HR Card */
+    .hr-card {
+        background: #f9f9f9;
+        border: 1px solid #b8860b;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .hr-card-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #111;
+        margin-bottom: 15px;
+    }
+
+    /* Table */
+    .hr-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        color: #111;
+    }
+
+    .hr-table th {
+        background: #f1f1f1;
+        color: #b8860b;
+        padding: 10px;
+        border-bottom: 2px solid #b8860b;
+        text-align: left;
+    }
+
+    .hr-table td {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .hr-table tr:hover {
+        background: #fff8e1;
+    }
+
+    /* Inputs */
+    .hr-table input {
+        width: 90px;
+        padding: 6px;
+        background: #fff;
+        border: 1px solid #b8860b;
+        color: #111;
+        border-radius: 4px;
+    }
+
+    .hr-table input:focus {
+        outline: none;
+        border-color: #e0a800;
+        box-shadow: 0 0 5px #b8860b;
+    }
+
+    /* Buttons */
+    .hr-btn-primary {
+        background: #b8860b;
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .hr-btn-primary:hover {
+        background: #e0a800;
+    }
+
+    .hr-btn-secondary {
+        background: transparent;
+        border: 1px solid #b8860b;
+        color: #b8860b;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .hr-btn-secondary:hover {
+        background: #b8860b;
+        color: #fff;
+    }
+</style>
+
+<div class="container mt-4">
+<a href="{{ url_for('human') }}" 
+   style="
+       display:inline-block;
+       margin-bottom:15px;
+       font-weight:700;
+       color:#b8860b;
+       text-decoration:none;
+       border:2px solid #b8860b;
+       padding:6px 14px;
+       border-radius:6px;
+   ">
+     Back
+</a>
+
+    <h2 class="inline-title">Inline Salary Editor</h2>
+
+    <div class="hr-card">
+        <div class="hr-card-title">Edit Salaries Directly</div>
+
+        <table class="hr-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Period</th>
+                    <th>Date</th>
+                    <th>Basic Salary</th>
+                    <th>Overtime</th>
+                    <th>Allowances</th>
+                    <th>Deductions</th>
+                    <th>Net Pay</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for s in salary_statements %}
+                <tr>
+                    <form action="{{ url_for('admin_salary_inline_update', statement_id=s.id) }}" method="post">
+                        <td>{{ s.user_name }}</td>
+                        <td>{{ s.period_label }}</td>
+                        <td>{{ s.statement_date }}</td>
+
+                        <td><input type="number" step="0.01" name="basic_salary" value="{{ s.basic_salary }}"></td>
+                        <td><input type="number" step="0.01" name="overtime_pay" value="{{ s.overtime_pay }}"></td>
+                        <td><input type="number" step="0.01" name="allowances" value="{{ s.allowances }}"></td>
+                        <td><input type="number" step="0.01" name="deductions" value="{{ s.deductions }}"></td>
+                        <td><input type="number" step="0.01" name="net_pay" value="{{ s.net_pay }}"></td>
+
+                        <td>
+						    <button type="submit" class="hr-btn-primary">Save</button>
+						
+						    {% if s.document_path %}
+						        <a href="{{ url_for('salary_download', statement_id=s.id) }}" class="hr-btn-secondary">View</a>
+						    {% else %}
+						        <a href="{{ url_for('salary_generate_pdf', statement_id=s.id) }}" class="hr-btn-secondary">Generate PDF</a>
+						    {% endif %}
+						</td>
+                        
+                    </form>
+                </tr>
+                {% else %}
+                <tr><td colspan="9">No salary statements yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

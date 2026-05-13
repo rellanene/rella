@@ -784,6 +784,7 @@
                 </div>
 
                 <button type="submit" class="hr-btn-primary">Save Salary Statement</button>
+				
             </form>
         </div>
 
@@ -807,8 +808,9 @@
                         <td>{{ s.statement_date }}</td>
                         <td>{{ s.net_pay }}</td>
 						<td>
-						    <a href="{{ url_for('admin_salary_edit', statement_id=s.id) }}" 
-						       class="hr-btn-secondary">Edit</a>
+							<a href="{{ url_for('admin_salary_inline') }}" 
+							   class="hr-btn-secondary">Edit</a>
+
 
 						    <a href="{{ url_for('salary_download', statement_id=s.id) }}" 
 						       class="hr-btn-secondary">View</a>

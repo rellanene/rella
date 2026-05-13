@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #fff;
+            color: #111;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Header bar (same as invoice.html) */
+        .header {
+            background: #d4af37;
+            color: #000;
+            padding: 18px 25px;
+            font-size: 26px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .container {
+            padding: 25px;
+        }
+
+        /* Info box (same style as invoice.html) */
+        .info-box {
+            background: #f5f5f5;
+            border-left: 4px solid #d4af37;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            border-radius: 4px;
+        }
+
+        .info-row {
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #444;
+        }
+
+        /* Table styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 15px;
+        }
+
+        th {
+            background: #d4af37;
+            color: #000;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+            border: 1px solid #b8860b;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #b8860b;
+        }
+
+        /* Totals row */
+        .total-row td {
+            font-weight: bold;
+            background: #fff8dc;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        SALARY STATEMENT — {{ statement.username }}
+    </div>
+
+    <div class="container">
+
+        <!-- Info Box -->
+        <div class="info-box">
+            <div class="info-row"><span class="info-label">Employee:</span> {{ statement.username }}</div>
+            <div class="info-row"><span class="info-label">Period:</span> {{ statement.period_label }}</div>
+            <div class="info-row"><span class="info-label">Date Issued:</span> {{ statement.statement_date }}</div>
+        </div>
+
+        <!-- Salary Table -->
+        <table>
+            <tr>
+                <th>Description</th>
+                <th>Amount</th>
+            </tr>
+
+            <tr>
+                <td>Basic Salary</td>
+                <td>{{ statement.basic_salary }}</td>
+            </tr>
+
+            <tr>
+                <td>Overtime</td>
+                <td>{{ statement.overtime_pay }}</td>
+            </tr>
+
+            <tr>
+                <td>Allowances</td>
+                <td>{{ statement.allowances }}</td>
+            </tr>
+
+            <tr>
+                <td>Deductions</td>
+                <td>{{ statement.deductions }}</td>
+            </tr>
+
+            <tr class="total-row">
+                <td>Net Pay</td>
+                <td>{{ statement.net_pay }}</td>
+            </tr>
+        </table>
+
+        <div class="footer">
+            This Salary Statement was generated electronically by the RELLA HR System.
+        </div>
+
+    </div>
+
+</body>
+</html>

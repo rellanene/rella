@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Manage Salary Statements{% endblock %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2 style="color:#111;">Manage Salary Statements</h2>
+
+    <div class="hr-card">
+        <div class="hr-card-title">Compile Salary Statement</div>
+
+        <form action="{{ url_for('admin_salary_create') }}" method="post">
+            <div class="hr-grid-2">
+                <div class="hr-form-group">
+                    <label>User</label>
+                    <select name="user_id" required>
+                        {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="hr-form-group">
+                    <label>Period (e.g. March 2026)</label>
+                    <input type="text" name="period_label" required>
+                </div>
+
+                <div class="hr-form-group">
+                    <label>Statement Date</label>
+                    <input type="date" name="statement_date" required>
+                </div>
+            </div>
+
+            <div class="hr-grid-2">
+                <div class="hr-form-group">
+                    <label>Basic Salary</label>
+                    <input type="number" step="0.01" name="basic_salary" required>
+                </div>
+
+                <div class="hr-form-group">
+                    <label>Overtime Pay</label>
+                    <input type="number" step="0.01" name="overtime_pay">
+                </div>
+
+                <div class="hr-form-group">
+                    <label>Allowances</label>
+                    <input type="number" step="0.01" name="allowances">
+                </div>
+
+                <div class="hr-form-group">
+                    <label>Deductions</label>
+                    <input type="number" step="0.01" name="deductions">
+                </div>
+            </div>
+
+            <div class="hr-form-group">
+                <label>Notes</label>
+                <textarea name="notes"></textarea>
+            </div>
+
+            <button type="submit" class="hr-btn-primary">Save Salary Statement</button>
+        </form>
+    </div>
+
+    <div class="hr-card mt-4">
+        <div class="hr-card-title">Salary Statements List</div>
+
+        <table class="hr-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Period</th>
+                    <th>Date</th>
+                    <th>Net Pay</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for s in salary_statements %}
+                <tr>
+                    <td>{{ s.user_name }}</td>
+                    <td>{{ s.period_label }}</td>
+                    <td>{{ s.statement_date }}</td>
+                    <td>{{ s.net_pay }}</td>
+
+                    <td>
+                        <a href="{{ url_for('admin_salary_edit', statement_id=s.id) }}" class="hr-btn-secondary">Edit</a>
+
+                        {% if s.document_path %}
+                            <a href="{{ url_for('salary_download', statement_id=s.id) }}" class="hr-btn-secondary">View PDF</a>
+                        {% else %}
+                            <span style="color:#999;">No PDF</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5">No salary statements yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

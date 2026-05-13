@@ -13,6 +13,13 @@ import pdfkit
 import io
 import time
 from flask import send_from_directory
+import pdfkit
+
+WKHTML_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+config = pdfkit.configuration(wkhtmltopdf=WKHTML_PATH)
+
+
+
 
 
 from functools import wraps
@@ -2171,34 +2178,171 @@ def admin_vacancy_create():
 
     return redirect(url_for("human"))
 
-@app.post("/hr/salary/create")
-@login_required
+@app.route('/admin/salary')
+def admin_salary():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    # Fetch salary statements
+    cursor.execute("""
+        SELECT s.*, u.username AS user_name
+        FROM salary_statements s
+        JOIN users u ON s.user_id = u.id
+        ORDER BY s.id DESC
+    """)
+    salary_statements = cursor.fetchall()
+
+    # Fetch users for dropdown
+    cursor.execute("SELECT id, username FROM users ORDER BY username")
+    users = cursor.fetchall()
+
+    return render_template("admin_salary_inline.html", salary_statements=salary_statements)
+
+    
+
+@app.route('/admin/salary/inline')
+def admin_salary_inline():
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    # ✅ Fetch salary statements joined with username from users table
+    cursor.execute("""
+        SELECT s.*, u.username AS user_name
+        FROM salary_statements s
+        JOIN users u ON s.user_id = u.id
+        ORDER BY s.id DESC
+    """)
+    salary_statements = cursor.fetchall()
+
+    return render_template("admin_salary_inline.html", salary_statements=salary_statements)
+
+
+
+
+###############
+
+
+
+
+@app.route('/admin/salary/<int:statement_id>/generate-pdf')
+def salary_generate_pdf(statement_id):
+    # Create a fresh MySQL connection JUST for this request
+    db = mysql.connector.connect(**DB_CONFIG)
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT s.*, u.username, u.email
+        FROM salary_statements s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.id=%s
+    """, (statement_id,))
+    statement = cursor.fetchone()
+
+    if not statement:
+        cursor.close()
+        db.close()
+        flash("Salary statement not found.", "error")
+        return redirect(url_for('admin_salary_inline'))
+
+    # Render HTML template for PDF
+    rendered = render_template("salary_pdf_template.html", statement=statement)
+
+    # PDF CONFIG
+    import pdfkit
+    WKHTML_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+    config = pdfkit.configuration(wkhtmltopdf=WKHTML_PATH)
+
+    # Output path
+    filename = f"salary_{statement_id}_{statement['username']}.pdf"
+    output_path = os.path.join(app.root_path, "finance_docs", filename)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # Generate PDF
+    pdfkit.from_string(rendered, output_path, configuration=config)
+
+    # Save filename in DB
+    cursor.execute("""
+        UPDATE salary_statements
+        SET document_path=%s
+        WHERE id=%s
+    """, (filename, statement_id))
+    db.commit()
+
+    cursor.close()
+    db.close()
+
+    flash("Salary PDF generated successfully.", "success")
+    return redirect(url_for('admin_salary_inline'))
+
+
+
+
+
+
+
+
+
+@app.route('/admin/salary/<int:statement_id>/inline-update', methods=['POST'])
+def admin_salary_inline_update(statement_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    basic_salary = request.form.get('basic_salary')
+    overtime_pay = request.form.get('overtime_pay')
+    allowances = request.form.get('allowances')
+    deductions = request.form.get('deductions')
+    net_pay = request.form.get('net_pay')
+
+    cursor.execute("""
+        UPDATE salary_statements
+        SET basic_salary=%s,
+            overtime_pay=%s,
+            allowances=%s,
+            deductions=%s,
+            net_pay=%s
+        WHERE id=%s
+    """, (basic_salary, overtime_pay, allowances, deductions, net_pay, statement_id))
+
+    db.commit()
+    return redirect(url_for('human'))
+
+
+@app.route('/admin/salary/create', methods=['POST'])
 def admin_salary_create():
-    data = request.form
-    user_id = data["user_id"]
+    db = mysql.connector.connect(**DB_CONFIG)
+    cursor = db.cursor()
 
-    basic = float(data["basic_salary"])
-    overtime = float(data.get("overtime_pay", 0))
-    allowances = float(data.get("allowances", 0))
-    deductions = float(data.get("deductions", 0))
+    user_id = request.form['user_id']
+    period_label = request.form['period_label']
+    statement_date = request.form['statement_date']
 
-    net = basic + overtime + allowances - deductions
+    basic_salary = float(request.form.get('basic_salary', 0))
+    overtime_pay = float(request.form.get('overtime_pay', 0))
+    allowances = float(request.form.get('allowances', 0))
+    deductions = float(request.form.get('deductions', 0))
 
-    cursor = get_db().cursor()
+    # ⭐ AUTO‑CALCULATE NET PAY
+    net_pay = basic_salary + overtime_pay + allowances - deductions
+
+    notes = request.form.get('notes', '')
+
     cursor.execute("""
         INSERT INTO salary_statements 
         (user_id, period_label, statement_date, basic_salary, overtime_pay, allowances, deductions, net_pay, notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (
-        user_id,
-        data["period_label"],
-        data["statement_date"],
-        basic, overtime, allowances, deductions, net,
-        data.get("notes")
-    ))
-    get_db().commit()
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (user_id, period_label, statement_date, basic_salary, overtime_pay, allowances, deductions, net_pay, notes))
 
-    return redirect(url_for("human"))
+    db.commit()
+    cursor.close()
+    db.close()
+
+    flash("Salary statement created successfully.", "success")
+    return redirect(url_for('admin_salary_inline'))
+    # ⭐ REQUIRED
+
+
+
+
 
 @app.route("/admin/salary/<int:statement_id>/edit", methods=["GET", "POST"])
 @login_required
@@ -3300,6 +3444,39 @@ def download_document(filename):
     upload_dir = os.path.join("uploads")  # same folder where you save files
     return send_from_directory(upload_dir, filename, as_attachment=True)
 
+from fpdf import FPDF
+import time
+import os
+
+def generate_salary_pdf(statement_id, profile, salary_data):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    pdf.cell(200, 10, txt="Salary Statement", ln=True, align="C")
+    pdf.ln(5)
+
+    pdf.cell(200, 10, txt=f"Employee: {profile.full_name}", ln=True)
+    pdf.cell(200, 10, txt=f"Email: {profile.email}", ln=True)
+    pdf.cell(200, 10, txt=f"Contact: {profile.contact}", ln=True)
+    pdf.ln(5)
+
+    pdf.cell(200, 10, txt=f"Basic Salary: R {salary_data['basic_salary']}", ln=True)
+    pdf.cell(200, 10, txt=f"Overtime Pay: R {salary_data['overtime_pay']}", ln=True)
+    pdf.cell(200, 10, txt=f"Allowances: R {salary_data['allowances']}", ln=True)
+    pdf.cell(200, 10, txt=f"Deductions: R {salary_data['deductions']}", ln=True)
+    pdf.ln(5)
+
+    pdf.cell(200, 10, txt=f"Net Salary: R {salary_data['net_salary']}", ln=True)
+
+    # Save PDF
+    filename = f"salary_{statement_id}_{int(time.time())}.pdf"
+    save_path = os.path.join("finance_docs", filename)
+    os.makedirs("finance_docs", exist_ok=True)
+    pdf.output(save_path)
+
+    return filename
+
 
     db.commit()
     flash("Profile updated successfully!", "success")
@@ -3319,6 +3496,37 @@ def download_document(filename):
 def comms():
     user = current_user()
     return render_template('comms.html', user=user)
+
+@app.route('/admin/salary/<int:statement_id>/update', methods=['POST'])
+def admin_salary_update(statement_id):
+    db = get_db()
+    cursor = db.cursor()
+
+    basic_salary = request.form.get('basic_salary')
+    overtime_pay = request.form.get('overtime_pay')
+    allowances = request.form.get('allowances')
+    deductions = request.form.get('deductions')
+    notes = request.form.get('notes')
+
+    # Recalculate net pay
+    net_pay = (
+        float(basic_salary or 0)
+        + float(overtime_pay or 0)
+        + float(allowances or 0)
+        - float(deductions or 0)
+    )
+
+    cursor.execute("""
+        UPDATE salary_statements
+        SET basic_salary=%s, overtime_pay=%s, allowances=%s,
+            deductions=%s, notes=%s, net_pay=%s
+        WHERE id=%s
+    """, (basic_salary, overtime_pay, allowances, deductions, notes, net_pay, statement_id))
+
+    db.commit()
+
+    return redirect(url_for('admin_salary'))
+
 
 # --- Finances main page ---
 @app.route('/finances', methods=['GET', 'POST'])
