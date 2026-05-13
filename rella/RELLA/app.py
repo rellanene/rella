@@ -2450,7 +2450,10 @@ def tasks():
         assigned_to = request.form.get('assigned_to')
         priority = request.form.get('priority', 'medium')
         status = 'open'
-        task_no = generate_task_no()
+
+        # NEW: Task number = timestamp (no spaces, no special characters)
+        from datetime import datetime
+        task_no = datetime.now().strftime("%Y%m%d%H%M%S")   # Example: 20260513161522
 
         execute("""
             INSERT INTO tasks (task_no, title, description, assigned_to, priority, status)
@@ -2482,10 +2485,6 @@ def tasks():
 
     return render_template("tasks.html", users=users, tasks=rows)
 
-
-
-
-    return render_template('tasks.html', tasks=rows, users=users, user=user)
 
 @app.route('/tasks/<int:task_id>')
 @require_login
