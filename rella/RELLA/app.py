@@ -2031,6 +2031,54 @@ def admin_leave_create():
     flash('Leave request captured', 'success')
     return redirect(url_for('human'))
 
+@app.route('/hr/leave/balance/view')
+@require_login
+def admin_leave_balance_view():
+    user_id = request.args.get('user_id')
+
+    if not user_id:
+        flash('Please select a user first.', 'warning')
+        return redirect(url_for('human'))
+
+    selected_user = query_one("SELECT id, username FROM users WHERE id=%s", (user_id,))
+
+    balances = query_all("""
+        SELECT lc.name AS category_name, lb.days_available
+        FROM leave_balances lb
+        LEFT JOIN leave_categories lc ON lb.category_id = lc.id
+        WHERE lb.user_id=%s
+    """, (user_id,))
+
+    return render_template('leave_balance_view.html', selected_user=selected_user, balances=balances)
+
+
+
+
+
+
+@app.route('/hr/leave/balance/view')
+@require_login
+def admin_view_leave_balance():
+    user_id = request.args.get('user_id')
+
+    if not user_id:
+        flash('Please select a user first.', 'warning')
+        return redirect(url_for('human'))
+
+    # FIXED: no more full_name
+    user = query_one("SELECT id, username, name FROM users WHERE id=%s", (user_id,))
+
+    balances = query_all("""
+        SELECT lc.name AS category_name, lb.days_available
+        FROM leave_balances lb
+        LEFT JOIN leave_categories lc ON lb.category_id = lc.id
+        WHERE lb.user_id=%s
+    """, (user_id,))
+
+    return render_template('leave_balance_view.html', user=user, balances=balances)
+
+
+
 
 
 
