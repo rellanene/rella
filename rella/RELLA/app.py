@@ -2011,22 +2011,26 @@ def admin_leave_balance_update():
 
 
 
-@app.post("/hr/leave/admin/create")
-@login_required
+@app.route('/hr/leave/admin/create', methods=['POST'])
+@require_login
 def admin_leave_create():
-    db = get_db()
-    cursor = db.cursor()
+    user = current_user()
 
-    leave_name = request.form["leave_name"]
-    days = request.form["days"]
+    user_id = request.form["user_id"]          # ✔ matches <select name="user_id">
+    leave_type = request.form["leave_type"]    # ✔ matches <select name="leave_type">
+    start_date = request.form["start_date"]    # ✔ matches <input name="start_date">
+    end_date = request.form["end_date"]        # ✔ matches <input name="end_date">
+    comment = request.form.get("comment")      # ✔ matches <textarea name="comment">
 
-    cursor.execute("""
-        INSERT INTO leave_categories (name, default_days)
-        VALUES (%s, %s)
-    """, (leave_name, days))
+    execute("""
+        INSERT INTO leave_requests (user_id, category_id, start_date, end_date, comment, status)
+        VALUES (%s, %s, %s, %s, %s, 'pending')
+    """, (user_id, leave_type, start_date, end_date, comment))
 
-    db.commit()
-    return redirect(url_for("human"))
+    log_action(user['id'], 'admin_leave_create', f'Leave request created for user {user_id}')
+    flash('Leave request captured', 'success')
+    return redirect(url_for('human'))
+
 
 
 
