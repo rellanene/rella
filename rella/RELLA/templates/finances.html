@@ -90,6 +90,26 @@
     </form>
 </div>
 
+<!-- Reconciliation -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>Reconciliation</h3>
+    </div>
+
+    <p><strong>Company‑wide reconciliation</strong> uses the same date filters above.</p>
+    <p><strong>User/Cashier reconciliation</strong> uses the cashier filter above.</p>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
+        <a href="{{ url_for('run_company_reconciliation', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}" class="btn-black">
+            Run Company Reconciliation
+        </a>
+
+        <a href="{{ url_for('run_user_reconciliation', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}" class="btn-black">
+            Run User/Cashier Reconciliation
+        </a>
+    </div>
+</div>
+
 <!-- Balance Statement -->
 <div class="section-card">
     <div class="section-header">
@@ -160,25 +180,7 @@
     </table>
 </div>
 
-<!-- Reconciliation -->
-<div class="section-card">
-    <div class="section-header">
-        <h3>Reconciliation</h3>
-    </div>
 
-    <p><strong>Company‑wide reconciliation</strong> uses the same date filters above.</p>
-    <p><strong>User/Cashier reconciliation</strong> uses the cashier filter above.</p>
-
-    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
-        <a href="{{ url_for('run_company_reconciliation', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}" class="btn-black">
-            Run Company Reconciliation
-        </a>
-
-        <a href="{{ url_for('run_user_reconciliation', start_date=start_date, end_date=end_date, user_id=selected_user_id) }}" class="btn-black">
-            Run User/Cashier Reconciliation
-        </a>
-    </div>
-</div>
 
 <!-- Financial Records -->
 <div class="section-card">

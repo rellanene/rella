@@ -15,6 +15,8 @@ import time
 from flask import send_from_directory
 import pdfkit
 
+app = Flask(__name__)
+
 WKHTML_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 config = pdfkit.configuration(wkhtmltopdf=WKHTML_PATH)
 
@@ -132,6 +134,10 @@ def has_permission(user_id, perm_code):
         return False
     mapping = query_one("SELECT id FROM user_permissions WHERE user_id=%s AND permission_id=%s", (user_id, perm['id']))
     return bool(mapping)
+
+
+
+
 @app.context_processor
 def inject_permissions():
     return dict(has_permission=has_permission)
@@ -157,9 +163,13 @@ def generate_invoice_no():
 def generate_task_no():
     return ''.join(random.choices(string.digits, k=6))
 
+
+
 @app.route("/")
 def home():
     return redirect(url_for("human"))
+
+
 
 
 # --- Auth routes ---
@@ -4043,5 +4053,8 @@ def finances_upload():
 
 
 # --- Run ---
-if __name__ == '__main__':
-    app.run(debug=True)
+
+
+if __name__ == "__main__":
+    
+    app.run(host="0.0.0.0", port=5000, debug=True)
