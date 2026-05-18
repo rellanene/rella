@@ -448,51 +448,7 @@
     <!-- ========================================================= -->
     <!-- STAFF: PROFILE -->
     <!-- ========================================================= -->
-    <div id="staff-profile" class="hr-section">
-        <div class="hr-card">
-            <div class="hr-card-title">My Profile</div>
-            <form action="{{ url_for('profile_update') }}" method="post" enctype="multipart/form-data">
-                <div class="hr-grid-2">
-                    <div class="hr-form-group">
-                        <label>Full Name</label>
-                        <input type="text" name="full_name" value="{{ profile.full_name or '' }}">
-                    </div>
-                    <div class="hr-form-group">
-                        <label>Email</label>
-                        <input type="email" name="email" value="{{ profile.email or '' }}">
-                    </div>
-                    <div class="hr-form-group">
-                        <label>Contact Number</label>
-                        <input type="text" name="contact" value="{{ profile.contact or '' }}">
-                    </div>
-                    <div class="hr-form-group">
-                        <label>Address</label>
-                        <input type="text" name="address" value="{{ profile.address or '' }}">
-                    </div>
-                </div>
-                <div class="hr-form-group">
-                    <label>Qualifications / Notes</label>
-                    <textarea name="qualifications">{{ profile.qualifications or '' }}</textarea>
-                </div>
-                <div class="hr-form-group">
-                    <label>Attach Documents (Certificates, etc.)</label>
-                    <input type="file" name="documents" multiple>
-                </div>
-                <button type="submit" class="hr-btn-primary">Update Profile</button>
-            </form>
-        </div>
 
-        <div class="hr-card">
-            <div class="hr-card-title">My Documents</div>
-            <ul>
-                {% for doc in profile_documents %}
-                    <li><a href="{{ url_for('profile_document_download', doc_id=doc.id) }}">{{ doc.filename }}</a></li>
-                {% else %}
-                    <li>No documents uploaded.</li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
 
     {% else %}
     {# =================================================================== #}

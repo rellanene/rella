@@ -1,14 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Permissions{% endblock %}
+
 {% block content %}
 <h1>Permissions</h1>
 
+<!-- ============================
+     USER MANAGEMENT
+============================= -->
 <div class="card">
   <h3>Users</h3>
+
   <table class="data-table">
     <thead>
-      <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Approved</th><th>Active</th><th>Actions</th></tr>
+      <tr>
+        <th>ID</th>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Approved</th>
+        <th>Active</th>
+        <th>Actions</th>
+      </tr>
     </thead>
+
     <tbody>
       {% for u in users %}
       <tr>
@@ -18,22 +32,26 @@
         <td>{{ u.role }}</td>
         <td>{{ u.is_approved }}</td>
         <td>{{ u.is_active }}</td>
+
         <td>
           <form method="post" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
             <input type="hidden" name="action" value="approve_user">
             <button type="submit">Approve</button>
           </form>
+
           <form method="post" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
             <input type="hidden" name="action" value="activate_user">
             <button type="submit">Activate</button>
           </form>
+
           <form method="post" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
             <input type="hidden" name="action" value="suspend_user">
             <button type="submit">Suspend</button>
           </form>
+
           <form method="post" style="display:inline">
             <input type="hidden" name="user_id" value="{{ u.id }}">
             <input type="hidden" name="action" value="delete_user">
@@ -46,23 +64,135 @@
   </table>
 </div>
 
+
+<!-- ============================
+     PERMISSION MANAGEMENT
+============================= -->
 <div class="card">
-  <h3>Grant Permission</h3>
-  <form method="post" class="add-form">
-    <input type="hidden" name="action" value="grant_perm">
-    <select name="user_id" required>
-      <option value="">Select user</option>
+  <h3>Manage Tab Access</h3>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Current Access</th>
+        <th>Grant Access</th>
+        <th>Remove Access</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.username }}</td>
+
+        <!-- CURRENT PERMISSIONS -->
+        <td>
+          {% if perm_map.get(u.id) %}
+            {% for p in perms %}
+              {% if p.id in perm_map.get(u.id) %}
+                <span class="tag">{{ p.code }}</span>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <em>No access</em>
+          {% endif %}
+        </td>
+
+        <!-- GRANT PERMISSION -->
+        <td>
+          <form method="post" style="display:flex; gap:6px;">
+            <input type="hidden" name="action" value="grant_perm">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+
+            <select name="perm_code" required>
+              <option value="">Select</option>
+              {% for p in perms %}
+                {% if p.id not in perm_map.get(u.id, []) %}
+                  <option value="{{ p.code }}">{{ p.code }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+
+            <button type="submit">Grant</button>
+          </form>
+        </td>
+
+        <!-- REMOVE PERMISSION -->
+        <td>
+          <form method="post" style="display:flex; gap:6px;">
+            <input type="hidden" name="action" value="remove_perm">
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+
+            <select name="perm_code" required>
+              <option value="">Select</option>
+              {% for p in perms %}
+                {% if p.id in perm_map.get(u.id, []) %}
+                  <option value="{{ p.code }}">{{ p.code }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+
+<!-- ============================
+     BULK PERMISSION ASSIGNMENT
+============================= -->
+<div class="card">
+  <h3>Bulk Permission Assignment</h3>
+
+  <!-- BULK GRANT -->
+  <form method="post" style="display:flex; flex-direction:column; gap:12px;">
+    <input type="hidden" name="action" value="bulk_grant">
+
+    <label><strong>Select Users:</strong></label>
+    <select name="user_ids" multiple size="6" required>
       {% for u in users %}
       <option value="{{ u.id }}">{{ u.username }}</option>
       {% endfor %}
     </select>
-    <select name="perm_code" required>
-      <option value="">Select permission</option>
+
+    <label><strong>Select Permissions:</strong></label>
+    <select name="perm_codes" multiple size="6" required>
       {% for p in perms %}
       <option value="{{ p.code }}">{{ p.code }}</option>
       {% endfor %}
     </select>
-    <button type="submit">Grant</button>
+
+    <button type="submit" style="margin-top:10px;">Grant Selected Permissions</button>
+  </form>
+
+  <hr>
+
+  <!-- BULK REMOVE -->
+  <form method="post" style="display:flex; flex-direction:column; gap:12px;">
+    <input type="hidden" name="action" value="bulk_remove">
+
+    <label><strong>Select Users:</strong></label>
+    <select name="user_ids" multiple size="6" required>
+      {% for u in users %}
+      <option value="{{ u.id }}">{{ u.username }}</option>
+      {% endfor %}
+    </select>
+
+    <label><strong>Select Permissions to Remove:</strong></label>
+    <select name="perm_codes" multiple size="6" required>
+      {% for p in perms %}
+      <option value="{{ p.code }}">{{ p.code }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" style="margin-top:10px; background:#b30000;">Remove Selected Permissions</button>
   </form>
 </div>
+
 {% endblock %}

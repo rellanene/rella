@@ -3129,47 +3129,224 @@ def task_upload(task_id):
 
 
 # --- Permissions management (admin only) ---
-@app.route('/permissions', methods=['GET','POST'])
+@app.route('/permissions', methods=['GET', 'POST'])
 @require_login
 def permissions_page():
     user = current_user()
+
+    # Only admins allowed
     if user['role'] != 'admin':
         flash('Only admins can access permissions', 'error')
         return redirect(url_for('dashboard'))
+
+    # ============================
+    # HANDLE POST ACTIONS
+    # ============================
     if request.method == 'POST':
         action = request.form.get('action')
+        uid = request.form.get('user_id')
+
+        # APPROVE USER
         if action == 'approve_user':
-            uid = request.form.get('user_id')
             execute("UPDATE users SET is_approved=1 WHERE id=%s", (uid,))
             log_action(user['id'], 'approve_user', f'Approved user {uid}')
             flash('User approved', 'success')
-        elif action == 'grant_perm':
-            uid = request.form.get('user_id')
-            perm_code = request.form.get('perm_code')
-            perm = query_one("SELECT id FROM permissions WHERE code=%s", (perm_code,))
-            if perm:
-                execute("INSERT INTO user_permissions (user_id,permission_id,granted_by) VALUES (%s,%s,%s)", (uid,perm['id'],user['id']))
-                log_action(user['id'], 'grant_permission', f'Granted {perm_code} to {uid}')
-                flash('Permission granted', 'success')
-        elif action == 'suspend_user':
-            uid = request.form.get('user_id')
-            execute("UPDATE users SET is_active=0 WHERE id=%s", (uid,))
-            log_action(user['id'], 'suspend_user', f'Suspended user {uid}')
-            flash('User suspended', 'success')
+
+        # ACTIVATE USER
         elif action == 'activate_user':
-            uid = request.form.get('user_id')
             execute("UPDATE users SET is_active=1 WHERE id=%s", (uid,))
             log_action(user['id'], 'activate_user', f'Activated user {uid}')
             flash('User activated', 'success')
+
+        # SUSPEND USER
+        elif action == 'suspend_user':
+            execute("UPDATE users SET is_active=0 WHERE id=%s", (uid,))
+            log_action(user['id'], 'suspend_user', f'Suspended user {uid}')
+            flash('User suspended', 'success')
+
+        # DELETE USER (SAFE DELETE)
         elif action == 'delete_user':
-            uid = request.form.get('user_id')
-            execute("DELETE FROM users WHERE id=%s", (uid,))
-            log_action(user['id'], 'delete_user', f'Deleted user {uid}')
-            flash('User deleted', 'success')
+            # Check foreign key dependencies
+            linked = query_one("""
+                SELECT COUNT(*) AS total
+                FROM salary_statements
+                WHERE user_id=%s
+            """, (uid,))
+
+            if linked['total'] > 0:
+                flash("Cannot delete user — linked salary statements exist.", "error")
+            else:
+                execute("DELETE FROM user_permissions WHERE user_id=%s", (uid,))
+                execute("DELETE FROM users WHERE id=%s", (uid,))
+                log_action(user['id'], 'delete_user', f'Deleted user {uid}')
+                flash('User deleted', 'success')
+
+        # GRANT PERMISSION (single)
+        elif action == 'grant_perm':
+            perm_code = request.form.get('perm_code')
+            perm = query_one("SELECT id FROM permissions WHERE code=%s", (perm_code,))
+            if perm:
+                execute("""
+                    INSERT IGNORE INTO user_permissions (user_id, permission_id, granted_by)
+                    VALUES (%s, %s, %s)
+                """, (uid, perm['id'], user['id']))
+                log_action(user['id'], 'grant_permission', f'Granted {perm_code} to {uid}')
+                flash('Permission granted', 'success')
+
+        # REMOVE PERMISSION (single)
+        elif action == 'remove_perm':
+            perm_code = request.form.get('perm_code')
+            perm = query_one("SELECT id FROM permissions WHERE code=%s", (perm_code,))
+            if perm:
+                execute("""
+                    DELETE FROM user_permissions
+                    WHERE user_id=%s AND permission_id=%s
+                """, (uid, perm['id']))
+                log_action(user['id'], 'remove_permission', f'Removed {perm_code} from {uid}')
+                flash('Permission removed', 'success')
+
+        # ============================
+        # BULK GRANT PERMISSIONS
+        # ============================
+        elif action == 'bulk_grant':
+            user_ids = request.form.getlist('user_ids')
+            perm_codes = request.form.getlist('perm_codes')
+
+            for uid in user_ids:
+                for code in perm_codes:
+                    perm = query_one("SELECT id FROM permissions WHERE code=%s", (code,))
+                    if perm:
+                        execute("""
+                            INSERT IGNORE INTO user_permissions (user_id, permission_id, granted_by)
+                            VALUES (%s, %s, %s)
+                        """, (uid, perm['id'], user['id']))
+
+            log_action(user['id'], 'bulk_grant', f'Granted {perm_codes} to users {user_ids}')
+            flash('Bulk permissions granted successfully.', 'success')
+
+        # ============================
+        # BULK REMOVE PERMISSIONS
+        # ============================
+        elif action == 'bulk_remove':
+            user_ids = request.form.getlist('user_ids')
+            perm_codes = request.form.getlist('perm_codes')
+
+            for uid in user_ids:
+                for code in perm_codes:
+                    perm = query_one("SELECT id FROM permissions WHERE code=%s", (code,))
+                    if perm:
+                        execute("""
+                            DELETE FROM user_permissions
+                            WHERE user_id=%s AND permission_id=%s
+                        """, (uid, perm['id']))
+
+            log_action(user['id'], 'bulk_remove', f'Removed {perm_codes} from users {user_ids}')
+            flash('Bulk permissions removed successfully.', 'success')
+
         return redirect(url_for('permissions_page'))
-    users = query_all("SELECT * FROM users")
-    perms = query_all("SELECT * FROM permissions")
-    return render_template('permissions.html', users=users, perms=perms, user=user)
+
+    # ============================
+    # LOAD DATA FOR PAGE
+    # ============================
+    users = query_all("SELECT * FROM users ORDER BY username ASC")
+    perms = query_all("SELECT * FROM permissions ORDER BY code ASC")
+
+    # Load all user-permission mappings
+    user_perms = query_all("""
+        SELECT user_id, permission_id
+        FROM user_permissions
+    """)
+
+    # Build perm_map = { user_id: {permission_id, ...}, ... }
+    perm_map = {}
+    for p in user_perms:
+        perm_map.setdefault(p['user_id'], set()).add(p['permission_id'])
+
+    # Render page
+    return render_template(
+        'permissions.html',
+        users=users,
+        perms=perms,
+        perm_map=perm_map,
+        user=user
+    )
+
+    
+ROUTE_PERMISSIONS = {
+    '/dashboard': 'view_dashboard',
+    '/sales': 'view_sales',
+    '/stock': 'view_stock',
+    '/products': 'view_products',
+    '/finances': 'view_finances',
+    '/reports': 'view_reports',
+    '/settings': 'view_settings',
+    '/clients': 'view_clients',
+    '/pos': 'view_pos',
+    '/records': 'view_records',
+    '/stores': 'view_stores',
+    '/stock-in': 'view_stock_in',
+    '/transfer': 'view_transfer',
+    '/movements': 'view_movements',
+    '/human': 'view_human',
+    '/comms': 'view_comms',
+    '/tasks': 'view_tasks',
+    '/permissions': 'view_permissions'
+}
+
+
+@app.before_request
+def enforce_permissions():
+    path = request.path
+
+    # Allow static files
+    if path.startswith('/static/'):
+        return
+
+    # Allow login, register, logout
+    if path in ['/login', '/register', '/logout']:
+        return
+
+    # Allow admin to access permissions page
+    if path.startswith('/permissions'):
+        return
+
+    # If route requires a permission
+    if path in ROUTE_PERMISSIONS:
+
+        # Must be logged in
+        if not session.get('user_id'):
+            return redirect(url_for('login'))
+
+        user = current_user()
+
+        # Admin bypass
+        if user['role'] == 'admin':
+            return
+
+        required_perm = ROUTE_PERMISSIONS[path]
+
+        # Load user permissions
+        rows = query_all("""
+            SELECT p.code
+            FROM user_permissions up
+            JOIN permissions p ON p.id = up.permission_id
+            WHERE up.user_id = %s
+        """, (user['id'],))
+
+        user_perms = {r['code'] for r in rows}
+
+        # Dashboard always allowed
+        user_perms.add('view_dashboard')
+
+        # If user lacks permission → redirect to dashboard
+        if required_perm not in user_perms:
+            flash("You do not have permission to access this page.", "error")
+            return redirect(url_for('dashboard'))
+
+
+
+    
+
 
 # --- Placeholder pages for HR, Comms, Finances, etc. ---
 @app.route("/human")
