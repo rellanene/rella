@@ -282,6 +282,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
 });
 </script>
+<script>
+RELLA.toast("Product added to transfer list", "success");
+RELLA.toast("Unknown barcode — product not found", "error");
+RELLA.toast("Please enter quantity for all products", "warn");
+RELLA.toast("Source and destination store cannot be the same", "error");
 
+</script>
 
 {% endblock %}

@@ -92,6 +92,7 @@ th, td {
 </form>
 
 <script>
+	
 document.addEventListener("DOMContentLoaded", function() {
 
     const barcodeInput = document.getElementById("barcode-input");
@@ -211,6 +212,11 @@ document.addEventListener("DOMContentLoaded", function() {
     storeSelect.addEventListener("change", validateForm);
 
 });
+
 </script>
+<script>
+RELLA.toast("Stock added", "success");
+</script>
+
 
 {% endblock %}

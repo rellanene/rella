@@ -224,21 +224,59 @@ def register():
                 return redirect(url_for('register'))
 
         pw_hash = generate_password_hash(password)
-        # staff must be approved before login
         is_approved = 1 if role == 'admin' else 0
-        user_id = execute("""INSERT INTO users
-            (username,email,password_hash,role,business_id,is_approved,q1,a1,q2,a2,q3,a3,created_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (username,email,pw_hash,role,business_id,is_approved,q1,a1,q2,a2,q3,a3,None))
-        # if admin, grant all permissions (application logic: insert all permission rows)
+
+        try:
+            # Attempt to insert user
+            user_id = execute("""
+                INSERT INTO users
+                (username,email,password_hash,role,business_id,is_approved,
+                 q1,a1,q2,a2,q3,a3,created_by)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (username,email,pw_hash,role,business_id,is_approved,
+                  q1,a1,q2,a2,q3,a3,None))
+
+        except mysql.connector.IntegrityError as e:
+
+            # Duplicate username or email
+            if e.errno == 1062:
+                if "username" in str(e):
+                    flash("Username already exists. Please choose a different one.", "error")
+                elif "email" in str(e):
+                    flash("Email already registered. Try logging in or use another email.", "error")
+                else:
+                    flash("Duplicate entry detected.", "error")
+
+                return redirect(url_for('register'))
+
+            flash("A database integrity error occurred.", "error")
+            return redirect(url_for('register'))
+
+        except mysql.connector.DatabaseError as e:
+
+            # Lock wait timeout (1205)
+            if e.errno == 1205:
+                flash("System busy. Please try again in a moment.", "error")
+                return redirect(url_for('register'))
+
+            flash("A database error occurred. Please try again.", "error")
+            return redirect(url_for('register'))
+
+        # If admin, grant all permissions
         if role == 'admin':
             perms = query_all("SELECT id FROM permissions")
             for p in perms:
-                execute("INSERT INTO user_permissions (user_id,permission_id,granted_by) VALUES (%s,%s,%s)", (user_id,p['id'],user_id))
+                execute("""
+                    INSERT INTO user_permissions (user_id,permission_id,granted_by)
+                    VALUES (%s,%s,%s)
+                """, (user_id, p['id'], user_id))
+
         log_action(user_id, 'register', f'User registered as {role}')
         flash('Registration successful. Await approval if staff.', 'success')
         return redirect(url_for('login'))
+
     return render_template('register.html')
+
 
 @app.route('/forgot-password', methods=['GET','POST'])
 def forgot_password():
@@ -2201,42 +2239,70 @@ def admin_leave_decline(leave_id):
 
 
 
-@app.post("/hr/vacancy/create")
+#create vacancy
+def safe_date(value):
+    return value if value and value.strip() else None
+
+
+def safe_date(value):
+    return value if value and value.strip() else None
+
+
+@app.route("/hr/vacancy/create", methods=["GET", "POST"])
 @login_required
 def admin_vacancy_create():
-    title = request.form["title"]
-    dept = request.form["department"]
-    desc = request.form["description"]
-    closing = request.form["closing_date"]
+    if request.method == "POST":
+        try:
+            title = request.form.get("title")
+            dept = request.form.get("department")
+            desc = request.form.get("description")
+            closing = safe_date(request.form.get("closing_date"))
 
-    cursor = get_db().cursor()
-    cursor.execute("""
-        INSERT INTO job_vacancies (title, department, description, closing_date)
-        VALUES (%s, %s, %s, %s)
-    """, (title, dept, desc, closing))
-    get_db().commit()
+            # Basic validation
+            if not title or not dept or not desc:
+                flash("Please fill in all required fields.", "error")
+                return redirect(url_for("admin_vacancy_create"))
 
-    return redirect(url_for("human"))
+            db = get_db()
+            cursor = db.cursor()
 
-@app.route('/admin/salary')
-def admin_salary():
-    db = get_db()
-    cursor = db.cursor(dictionary=True)
+            cursor.execute("""
+                INSERT INTO job_vacancies (title, department, description, closing_date)
+                VALUES (%s, %s, %s, %s)
+            """, (title, dept, desc, closing))
 
-    # Fetch salary statements
-    cursor.execute("""
-        SELECT s.*, u.username AS user_name
-        FROM salary_statements s
-        JOIN users u ON s.user_id = u.id
-        ORDER BY s.id DESC
-    """)
-    salary_statements = cursor.fetchall()
+            db.commit()
+            flash("Vacancy created successfully.", "success")
+            return redirect(url_for("human"))
 
-    # Fetch users for dropdown
-    cursor.execute("SELECT id, username FROM users ORDER BY username")
-    users = cursor.fetchall()
+        except mysql.connector.DataError as e:
+            if e.errno == 1292:
+                flash("Invalid or missing closing date. Please enter a valid date.", "error")
+            else:
+                flash("Invalid data submitted. Please check all fields.", "error")
+            return redirect(url_for("admin_vacancy_create"))
 
-    return render_template("admin_salary_inline.html", salary_statements=salary_statements)
+        except mysql.connector.DatabaseError as e:
+            if e.errno == 1205:
+                flash("System busy. Please try again in a moment.", "error")
+            else:
+                flash("Database error occurred. Please try again.", "error")
+            return redirect(url_for("admin_vacancy_create"))
+
+        except Exception:
+            flash("Unexpected error. Please check your inputs.", "error")
+            return redirect(url_for("admin_vacancy_create"))
+
+        finally:
+            try:
+                cursor.close()
+            except:
+                pass
+
+    # GET request — show the vacancy creation form
+    return render_template("hr_vacancy_create.html")
+
+
 
     
 
@@ -2347,37 +2413,75 @@ def admin_salary_inline_update(statement_id):
     return redirect(url_for('human'))
 
 
+#create salary
+# Safe float converter to avoid ValueError
+def to_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 @app.route('/admin/salary/create', methods=['POST'])
 def admin_salary_create():
-    db = mysql.connector.connect(**DB_CONFIG)
-    cursor = db.cursor()
+    try:
+        db = mysql.connector.connect(**DB_CONFIG)
+        cursor = db.cursor()
 
-    user_id = request.form['user_id']
-    period_label = request.form['period_label']
-    statement_date = request.form['statement_date']
+        user_id = request.form['user_id']
+        period_label = request.form['period_label']
+        statement_date = request.form['statement_date']
 
-    basic_salary = float(request.form.get('basic_salary', 0))
-    overtime_pay = float(request.form.get('overtime_pay', 0))
-    allowances = float(request.form.get('allowances', 0))
-    deductions = float(request.form.get('deductions', 0))
+        # SAFE conversion (no more ValueError)
+        basic_salary = to_float(request.form.get('basic_salary'))
+        overtime_pay = to_float(request.form.get('overtime_pay'))
+        allowances = to_float(request.form.get('allowances'))
+        deductions = to_float(request.form.get('deductions'))
 
-    # ⭐ AUTO‑CALCULATE NET PAY
-    net_pay = basic_salary + overtime_pay + allowances - deductions
+        # Auto-calc net pay
+        net_pay = basic_salary + overtime_pay + allowances - deductions
 
-    notes = request.form.get('notes', '')
+        notes = request.form.get('notes', '')
 
-    cursor.execute("""
-        INSERT INTO salary_statements 
-        (user_id, period_label, statement_date, basic_salary, overtime_pay, allowances, deductions, net_pay, notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (user_id, period_label, statement_date, basic_salary, overtime_pay, allowances, deductions, net_pay, notes))
+        cursor.execute("""
+            INSERT INTO salary_statements 
+            (user_id, period_label, statement_date, basic_salary, overtime_pay, allowances, deductions, net_pay, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            user_id, period_label, statement_date,
+            basic_salary, overtime_pay, allowances, deductions,
+            net_pay, notes
+        ))
 
-    db.commit()
-    cursor.close()
-    db.close()
+        db.commit()
+        flash("Salary statement created successfully.", "success")
+        return redirect(url_for('admin_salary_inline'))
 
-    flash("Salary statement created successfully.", "success")
-    return redirect(url_for('admin_salary_inline'))
+    # Duplicate entry, constraint errors, etc.
+    except mysql.connector.IntegrityError as e:
+        flash("A salary record for this period already exists.", "error")
+        return redirect(url_for('admin_salary_inline'))
+
+    # Lock wait timeout or other DB errors
+    except mysql.connector.DatabaseError as e:
+        if e.errno == 1205:
+            flash("System busy. Please try again in a moment.", "error")
+        else:
+            flash("Database error occurred. Please try again.", "error")
+        return redirect(url_for('admin_salary_inline'))
+
+    # Any other unexpected error
+    except Exception as e:
+        flash("Invalid input. Please check all fields.", "error")
+        return redirect(url_for('admin_salary_inline'))
+
+    finally:
+        try:
+            cursor.close()
+            db.close()
+        except:
+            pass
+
     # ⭐ REQUIRED
 
 

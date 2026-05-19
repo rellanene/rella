@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div style="max-width: 900px; margin: 0 auto; padding-top: 20px;">
+
+    <!-- CARD -->
+    <div class="hr-card" style="padding: 25px; border-radius: 10px;">
+
+        <h2 style="
+            margin-bottom: 25px;
+            font-weight: 700;
+            color: #d4af37;
+            border-bottom: 2px solid #d4af37;
+            padding-bottom: 8px;
+        ">
+            Create Job Vacancy
+        </h2>
+
+        <form action="{{ url_for('admin_vacancy_create') }}" method="POST">
+
+            <!-- Job Title -->
+            <div class="hr-form-group" style="margin-bottom: 18px;">
+                <label style="font-weight: 600;">Job Title</label>
+                <input type="text" name="title" placeholder="Enter job title"
+                       required
+                       style="padding: 12px; margin-top: 6px; border-radius: 6px;">
+            </div>
+
+            <!-- Department -->
+            <div class="hr-form-group" style="margin-bottom: 18px;">
+                <label style="font-weight: 600;">Department</label>
+                <input type="text" name="department" placeholder="Enter department"
+                       required
+                       style="padding: 12px; margin-top: 6px; border-radius: 6px;">
+            </div>
+
+            <!-- Description -->
+            <div class="hr-form-group" style="margin-bottom: 18px;">
+                <label style="font-weight: 600;">Description</label>
+                <textarea name="description" placeholder="Enter job description"
+                          required
+                          style="padding: 12px; margin-top: 6px; min-height: 140px; border-radius: 6px;"></textarea>
+            </div>
+
+            <!-- Closing Date -->
+            <div class="hr-form-group" style="margin-bottom: 18px;">
+                <label style="font-weight: 600;">Closing Date</label>
+                <input type="date" name="closing_date"
+                       required
+                       style="padding: 12px; margin-top: 6px; border-radius: 6px;">
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit"
+                    style="
+                        margin-top: 10px;
+                        background: #d4af37;
+                        color: black;
+                        font-weight: 800;
+                        padding: 12px 22px;
+                        border-radius: 6px;
+                        border: none;
+                        cursor: pointer;
+                        font-size: 1rem;
+                        transition: 0.2s;
+                        width: 100%;
+                    "
+                    onmouseover="this.style.background='#b8962f'"
+                    onmouseout="this.style.background='#d4af37'">
+                Create Vacancy
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}
