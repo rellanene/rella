@@ -1,0 +1,124 @@
+Date & Time,User,Product,Type,Qty,From,To,Invoice
+2026-05-18 23:58:04,Clement Nene,WD Green 240GB,transfer,1,1,2,
+2026-05-18 23:58:04,Clement Nene,Barcode Scanner,transfer,1,1,2,
+2026-05-18 23:57:01,Clement Nene,Barcode Scanner,transfer,1,1,2,
+2026-05-18 23:54:36,Clement Nene,WD Green 240GB,stock_in,3,,2,
+2026-05-18 23:54:08,Clement Nene,WD Green 240GB,transfer,1,1,2,
+2026-05-18 23:51:47,Clement Nene,WD Green 240GB,sale,7,1,,INV20260518235147
+2026-05-18 23:51:47,Clement Nene,Power Bank,sale,3,1,,INV20260518235147
+2026-05-18 23:51:47,Clement Nene,DELL wireless mouse ,sale,3,1,,INV20260518235147
+2026-05-18 23:46:47,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260518234647
+2026-05-18 23:46:47,Clement Nene,Barcode Scanner,sale,1,1,,INV20260518234647
+2026-05-18 20:16:54,Clement Nene,WD Green 240GB,stock_in,5,,1,
+2026-05-18 20:16:19,Clement Nene,Barcode Scanner,stock_in,3,,1,
+2026-05-18 20:14:50,Clement Nene,Barcode Scanner,transfer,1,1,2,
+2026-05-18 20:13:28,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260518201328
+2026-05-16 23:32:07,Clement Nene,Barcode Scanner,transfer,1,1,2,
+2026-05-16 23:30:33,Clement Nene,Barcode Scanner,transfer,1,1,2,
+2026-05-16 22:30:25,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260516223025
+2026-05-15 12:02:32,Clement Nene,Barcode Scanner,sale,2,1,,INV20260515120232
+2026-05-15 09:43:16,Clement Nene,Barcode Scanner,sale,1,1,,INV20260515094315
+2026-05-13 21:25:01,Clement Nene,WD Green 240GB,sale,3,1,,INV20260513212501
+2026-05-13 21:25:01,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260513212501
+2026-05-12 14:54:52,Clement Nene,8GB Ram,sale,1,1,,INV20260512145452
+2026-05-12 14:54:52,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260512145452
+2026-05-10 12:32:44,Clement Nene,WD Green 240GB,sale,4,1,,INV20260510123244
+2026-05-10 12:32:44,Clement Nene,Power Bank,sale,2,1,,INV20260510123244
+2026-05-10 12:32:44,Clement Nene,8GB Ram,sale,1,1,,INV20260510123244
+2026-05-10 12:32:44,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260510123244
+2026-05-10 12:32:44,Clement Nene,Barcode Scanner,sale,1,1,,INV20260510123244
+2026-05-10 12:32:06,Clement Nene,Barcode Scanner,sale,1,1,,INV20260510123206
+2026-05-09 22:56:13,Clement Nene,Barcode Scanner,sale,1,1,,INV20260509225613
+2026-05-09 22:56:13,Clement Nene,DELL wireless mouse ,sale,2,1,,INV20260509225613
+2026-05-09 22:54:05,Clement Nene,DELL wireless mouse ,sale,1,1,,INV20260509225405
+2026-05-09 22:54:05,Clement Nene,Barcode Scanner,sale,2,1,,INV20260509225405
+2026-05-09 22:50:07,Clement Nene,Barcode Scanner,stock_in,1,,1,
+2026-05-09 22:49:30,Clement Nene,Barcode Scanner,stock_in,1,,1,
+2026-05-09 22:13:49,Clement Nene,Barcode Scanner,stock_in,4,,1,
+2026-05-09 22:12:51,Clement Nene,Barcode Scanner,stock_in,1,,1,
+2026-05-09 22:05:35,Clement Nene,Barcode Scanner,stock_in,2,,1,
+2026-05-09 21:15:58,Clement Nene,Barcode Scanner,stock_in,3,,2,
+2026-05-09 19:16:42,clement6,Barcode Scanner,sale,1,1,,INV20260509191642
+2026-05-09 17:37:39,Clement Nene,Barcode Scanner,sale,1,1,,INV20260509173739
+2026-05-09 14:54:41,Clement Nene,Barcode Scanner,sale,2,1,,INV20260509145441
+2026-05-09 14:54:10,Clement Nene,Barcode Scanner,sale,1,1,,INV20260509145410
+2026-05-09 14:20:27,Clement Nene,DELL wireless mouse ,stock_in,35,,2,
+2026-05-09 14:00:22,Clement Nene,WD Green 240GB,stock_in,70,,1,
+2026-05-09 13:59:59,Clement Nene,Power Bank,stock_in,80,,1,
+2026-05-09 13:59:33,Clement Nene,DELL wireless mouse ,stock_in,90,,1,
+2026-05-09 13:59:10,Clement Nene,8GB Ram,stock_in,100,,1,
+2026-05-09 13:58:07,Clement Nene,Barcode Scanner,stock_in,10,,1,
+2026-05-09 13:57:29,Clement Nene,Barcode Scanner,stock_in,21,,1,
+2026-05-09 13:54:33,Clement Nene,Barcode Scanner,stock_in,20,,1,
+2026-05-09 13:45:38,Clement Nene,Barcode Scanner,stock_in,100,,1,
+2026-05-09 13:41:08,Clement Nene,Barcode Scanner,stock_in,0,,1,
+2026-05-09 13:40:03,Clement Nene,WD Green 240GB,stock_in,0,,1,
+2026-05-09 13:15:01,Clement Nene,WD Green 240GB,sale,1,2,,INV20260509131501
+2026-05-09 13:15:01,Clement Nene,Power Bank,sale,1,2,,INV20260509131501
+2026-05-09 13:15:01,Clement Nene,DELL wireless mouse ,sale,1,2,,INV20260509131501
+2026-05-09 13:06:07,Clement Nene,8GB Ram,sale,1,1,,INV20260509130607
+2026-05-09 13:06:07,Clement Nene,Barcode Scanner,sale,3,1,,INV20260509130607
+2026-05-09 12:38:12,Clement Nene,Barcode Scanner,sale,2,1,,INV20260509123812
+2026-05-09 12:33:30,Clement Nene,Barcode Scanner,sale,1,1,,INV20260509123329
+2026-05-09 12:25:01,Clement Nene,8GB Ram,sale,3,1,,
+2026-05-09 12:25:01,Clement Nene,Power Bank,sale,2,1,,
+2026-05-09 12:23:52,Clement Nene,DELL wireless mouse ,sale,1,1,,
+2026-05-09 12:23:52,Clement Nene,8GB Ram,sale,1,1,,
+2026-05-09 12:23:52,Clement Nene,Power Bank,sale,1,1,,
+2026-05-09 12:23:52,Clement Nene,WD Green 240GB,sale,3,1,,
+2026-05-09 12:23:00,Clement Nene,Barcode Scanner,sale,4,1,,
+2026-05-09 10:50:34,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:50:33,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:50:32,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:34:21,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:12:32,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:12:31,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:12:30,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:12:29,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:12:27,Clement Nene,,stock_in,0,,1,
+2026-05-09 10:12:24,Clement Nene,,stock_in,0,,1,
+2026-05-06 21:22:54,Clement Nene,,transfer,0,1,2,
+2026-05-06 21:10:35,Clement Nene,Barcode Scanner,transfer,1,2,1,
+2026-05-06 21:10:35,Clement Nene,8GB Ram,transfer,1,2,1,
+2026-05-06 21:10:35,Clement Nene,DELL wireless mouse ,transfer,1,2,1,
+2026-05-06 21:06:43,Clement Nene,8GB Ram,transfer,1,1,2,
+2026-05-06 21:06:43,Clement Nene,DELL wireless mouse ,transfer,1,1,2,
+2026-05-06 21:05:19,Clement Nene,8GB Ram,transfer,1,2,1,
+2026-05-06 21:05:19,Clement Nene,Barcode Scanner,transfer,1,2,1,
+2026-05-06 21:04:00,Clement Nene,WD Green 240GB,transfer,1,1,2,
+2026-05-06 20:53:27,Clement Nene,,transfer,0,1,2,
+2026-05-06 20:49:42,Clement Nene,,transfer,0,,,
+2026-05-06 20:49:27,Clement Nene,,transfer,0,,,
+2026-05-06 20:43:32,Clement Nene,WD Green 240GB,sale,2,2,,INV20260506204332
+2026-05-06 20:42:25,Clement Nene,,transfer,0,1,2,
+2026-05-06 20:07:36,Clement Nene,,transfer,0,,,
+2026-05-06 20:07:32,Clement Nene,,transfer,0,,,
+2026-05-06 20:05:08,Clement Nene,,transfer,0,,,
+2026-05-06 20:05:07,Clement Nene,,transfer,0,,,
+2026-05-06 20:05:06,Clement Nene,,transfer,0,,,
+2026-05-06 20:05:05,Clement Nene,,transfer,0,,,
+2026-05-06 20:05:01,Clement Nene,,transfer,0,,,
+2026-05-06 20:05:00,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:59,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:58,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:55,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:54,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:53,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:51,Clement Nene,,transfer,0,,,
+2026-05-06 20:04:46,Clement Nene,,transfer,0,,,
+2026-05-06 19:56:26,Clement Nene,,transfer,0,1,2,
+2026-05-06 19:48:07,Clement Nene,,transfer,0,2,1,
+2026-05-06 19:41:37,Clement Nene,,transfer,0,1,1,
+2026-05-06 19:40:58,Clement Nene,,transfer,0,1,1,
+2026-05-06 19:29:19,Clement Nene,WD Green 240GB,transfer,3,2,1,
+2026-05-06 19:28:57,Clement Nene,WD Green 240GB,stock_in,2,,1,
+2026-05-06 19:27:59,Clement Nene,Barcode Scanner,sale,1,2,,INV20260506192759
+2026-05-03 17:54:03,Clement Nene,Barcode Scanner,stock_in,9,,1,
+2026-05-03 07:44:58,Clement Nene,WD Green 240GB,transfer,1,1,1,
+2026-05-01 13:49:37,Clement Nene,WD Green 240GB,transfer,4,2,1,
+2026-05-01 13:49:21,Clement Nene,WD Green 240GB,stock_in,9,,2,
+2026-04-30 07:42:40,Clement Nene,Power Bank,transfer,2,1,2,
+2026-04-30 07:41:10,Clement Nene,Power Bank,stock_in,5,,1,
+2026-04-30 07:22:26,Clement Nene,WD Green 240GB,stock_in,2,,2,
+2026-04-29 21:47:29,Clement Nene,WD Green 240GB,transfer,1,1,2,
+2026-04-29 21:44:48,Clement Nene,WD Green 240GB,stock_in,5,,1,
