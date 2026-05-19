@@ -609,13 +609,29 @@ def dashboard():
             SELECT DATE(created_at) AS day, SUM(total) AS total
             FROM sales
             WHERE created_by = %s
+              AND created_at >= DATE(NOW()) - INTERVAL 6 DAY
             GROUP BY day
             ORDER BY day ASC
-            LIMIT 7
         """, (user_id,))
+        
         rows = cursor.fetchall() or []
-        records_labels = [str(r["day"]) for r in rows] or ["No sales"]
-        records_data = [float(r["total"] or 0) for r in rows] or [0]
+        
+        # Build a dictionary for quick lookup
+        sales_map = {str(r["day"]): float(r["total"] or 0) for r in rows}
+        
+        # Generate last 7 days including today
+        from datetime import datetime, timedelta
+        
+        records_labels = []
+        records_data = []
+        
+        for i in range(6, -1, -1):  # 6 days ago → today
+            day = (datetime.now() - timedelta(days=i)).date()
+            day_str = str(day)
+        
+            records_labels.append(day_str)
+            records_data.append(sales_map.get(day_str, 0))
+
 
         # STORES STOCK LEVELS
         cursor.execute("""
