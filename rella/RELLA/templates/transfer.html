@@ -64,57 +64,57 @@
 
 <div class="form-container">
 
-<form method="POST" id="transfer-form">
+    <form method="POST" id="transfer-form">
 
-    <!-- SCAN BARCODE -->
-    <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">
+        <!-- SCAN BARCODE -->
+        <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">
 
-    <!-- MANUAL PRODUCT SELECT -->
-    <select id="productSelect" class="scan-input">
-        <option value="">Select product manually</option>
-        {% for p in products %}
-        <option value="{{ p.id }}" data-barcode="{{ p.barcode }}">{{ p.name }}</option>
-        {% endfor %}
-    </select>
-
-    <!-- STORE SELECTION CONTROL BUTTONS -->
-    <div style="margin-top: 5px;">
-        <button type="button" id="unlockStores" class="btn-black">Select Stores</button>
-        <button type="button" id="resumeScan" class="btn-gold" style="display:none;">Resume Scanning</button>
-    </div>
-
-    <!-- STORES -->
-    <div style="margin-top: 15px;">
-        <label>From Store:</label>
-        <select name="from_store" id="fromStore" class="scan-input" required disabled>
-            {% for s in stores %}
-            <option value="{{ s.id }}">{{ s.name }}</option>
+        <!-- MANUAL PRODUCT SELECT -->
+        <select id="productSelect" class="scan-input">
+            <option value="">Select product manually</option>
+            {% for p in products %}
+            <option value="{{ p.id }}" data-barcode="{{ p.barcode }}">{{ p.name }}</option>
             {% endfor %}
         </select>
 
-        <label>To Store:</label>
-        <select name="to_store" id="toStore" class="scan-input" required disabled>
-            {% for s in stores %}
-            <option value="{{ s.id }}">{{ s.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
+        <!-- STORE SELECTION CONTROL BUTTONS -->
+        <div style="margin-top: 5px;">
+            <button type="button" id="unlockStores" class="btn-black">Select Stores</button>
+            <button type="button" id="resumeScan" class="btn-gold" style="display:none;">Resume Scanning</button>
+        </div>
 
-    <!-- TRANSFER TABLE -->
-    <table id="transferTable">
-        <thead>
-            <tr>
-                <th>Product</th>
-                <th>Qty</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+        <!-- STORES -->
+        <div style="margin-top: 15px;">
+            <label>From Store:</label>
+            <select name="from_store" id="fromStore" class="scan-input" required disabled>
+                {% for s in stores %}
+                <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+            </select>
 
-    <button type="submit" id="submitTransferBtn" class="btn-gold" style="margin-top: 15px;">Submit Transfer</button>
+            <label>To Store:</label>
+            <select name="to_store" id="toStore" class="scan-input" required disabled>
+                {% for s in stores %}
+                <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
 
-</form>
+        <!-- TRANSFER TABLE -->
+        <table id="transferTable">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <button type="submit" id="submitTransferBtn" class="btn-gold" style="margin-top: 15px;">Submit Transfer</button>
+
+    </form>
 
 </div>
 
@@ -124,6 +124,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const barcodeInput = document.getElementById("barcode-input");
     const productSelect = document.getElementById("productSelect");
     const tableBody = document.querySelector("#transferTable tbody");
+    const submitBtn = document.getElementById("submitTransferBtn");
 
     const unlockBtn = document.getElementById("unlockStores");
     const resumeBtn = document.getElementById("resumeScan");
@@ -131,11 +132,20 @@ document.addEventListener("DOMContentLoaded", function() {
     const toStore = document.getElementById("toStore");
 
     let dropdownMode = false;
+    let autoFocusEnabled = true;
 
     /* ----------------------------------------------------
-       SAME FOCUS ENGINE AS SALES PAGE
+       BLOCK ENTER FROM SUBMITTING FORM
+    ---------------------------------------------------- */
+    document.getElementById("transfer-form").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") e.preventDefault();
+    });
+
+    /* ----------------------------------------------------
+       FOCUS ENGINE
     ---------------------------------------------------- */
     function focusScanner() {
+        if (!autoFocusEnabled) return;
         barcodeInput.focus();
         barcodeInput.select();
     }
@@ -143,16 +153,17 @@ document.addEventListener("DOMContentLoaded", function() {
     focusScanner();
 
     document.addEventListener("click", function(e) {
-        if (!dropdownMode && !barcodeInput.contains(e.target)) {
+        if (autoFocusEnabled && !dropdownMode && !barcodeInput.contains(e.target)) {
             focusScanner();
         }
     });
 
     /* ----------------------------------------------------
-       Unlock / Resume store selection
+       UNLOCK / RESUME STORE SELECTION
     ---------------------------------------------------- */
     unlockBtn.addEventListener("click", () => {
         dropdownMode = true;
+        autoFocusEnabled = false;
         fromStore.disabled = false;
         toStore.disabled = false;
         unlockBtn.style.display = "none";
@@ -161,6 +172,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     resumeBtn.addEventListener("click", () => {
         dropdownMode = false;
+        autoFocusEnabled = true;
         fromStore.disabled = true;
         toStore.disabled = true;
         resumeBtn.style.display = "none";
@@ -169,20 +181,13 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     /* ----------------------------------------------------
-       Add product to table (FULLY BACKEND COMPATIBLE)
+       ADD PRODUCT WITH REQUIRED QUANTITY INPUT
     ---------------------------------------------------- */
     function addProduct(productId, productName) {
         let existing = document.querySelector(`tr[data-id="${productId}"]`);
 
         if (existing) {
-            let hiddenQty = existing.querySelector("input[name='quantity[]']");
-            let qtyCell = existing.querySelector(".qty");
-
-            let newQty = parseInt(hiddenQty.value) + 1;
-
-            hiddenQty.value = newQty;
-            qtyCell.textContent = newQty;
-
+            existing.querySelector(".qty-input").focus();
             return;
         }
 
@@ -190,14 +195,12 @@ document.addEventListener("DOMContentLoaded", function() {
         row.setAttribute("data-id", productId);
 
         row.innerHTML = `
-            <td>
-                ${productName}
+            <td>${productName}
                 <input type="hidden" name="product_id[]" value="${productId}">
             </td>
 
-            <td class="qty">
-                1
-                <input type="hidden" name="quantity[]" value="1">
+            <td>
+                <input type="number" name="quantity[]" class="qty-input" min="1" required placeholder="Qty">
             </td>
 
             <td>
@@ -207,61 +210,78 @@ document.addEventListener("DOMContentLoaded", function() {
 
         tableBody.appendChild(row);
 
-        row.querySelector(".remove-btn").addEventListener("click", () => row.remove());
+        row.querySelector(".remove-btn").addEventListener("click", () => {
+            row.remove();
+            validateForm();
+        });
+
+        row.querySelector(".qty-input").addEventListener("input", validateForm);
+
+        row.querySelector(".qty-input").focus();
+
+        validateForm();
     }
 
     /* ----------------------------------------------------
-       SCAN HANDLER — IDENTICAL TO SALES PAGE
+       PROCESS SCAN
     ---------------------------------------------------- */
-    barcodeInput.addEventListener("keydown", function(e) {
+    function processScan(code) {
+        let option = [...productSelect.options].find(o => o.dataset.barcode === code);
+        if (option) addProduct(option.value, option.textContent);
+    }
+
+    /* ----------------------------------------------------
+       SIMPLE SCAN ENGINE
+    ---------------------------------------------------- */
+    barcodeInput.addEventListener("keyup", function(e) {
         if (e.key === "Enter") {
-            e.preventDefault();
-
-            let code = barcodeInput.value.trim();
-            if (!code) return;
-
-            let option = [...productSelect.options].find(o => o.dataset.barcode === code);
-
-            if (option) {
-                addProduct(option.value, option.textContent);
-            }
-
+            const code = barcodeInput.value.trim();
+            if (code.length > 0) processScan(code);
             barcodeInput.value = "";
-            barcodeInput.placeholder = "";
-
-            setTimeout(() => {
-                barcodeInput.placeholder = "Scan barcode...";
-                focusScanner();
-            }, 10);
+            focusScanner();
         }
     });
 
     /* ----------------------------------------------------
-       Prevent scanner from submitting the form
-    ---------------------------------------------------- */
-    document.getElementById("transfer-form").addEventListener("keydown", function(e) {
-        if (e.key === "Enter") {
-            e.preventDefault();
-        }
-    });
-
-    document.getElementById("transfer-form").addEventListener("submit", function(e) {
-        if (!e.submitter || e.submitter.id !== "submitTransferBtn") {
-            e.preventDefault();
-        }
-    });
-
-    /* ----------------------------------------------------
-       Manual select
+       MANUAL SELECT
     ---------------------------------------------------- */
     productSelect.addEventListener("change", function() {
         if (this.value) {
             addProduct(this.value, this.options[this.selectedIndex].textContent);
             this.value = "";
+            focusScanner();
         }
     });
 
+    /* ----------------------------------------------------
+       VALIDATION ENGINE
+       - All qty inputs must be filled
+       - From store cannot equal To store
+       - Disable submit button if invalid
+    ---------------------------------------------------- */
+    function validateForm() {
+        let valid = true;
+
+        // 1. Check store mismatch
+        if (fromStore.value === toStore.value) {
+            valid = false;
+        }
+
+        // 2. Check all quantity inputs
+        document.querySelectorAll(".qty-input").forEach(input => {
+            if (input.value.trim() === "" || parseInt(input.value) < 1) {
+                valid = false;
+            }
+        });
+
+        submitBtn.disabled = !valid;
+    }
+
+    fromStore.addEventListener("change", validateForm);
+    toStore.addEventListener("change", validateForm);
+
 });
 </script>
+
 
 {% endblock %}

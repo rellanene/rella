@@ -1655,7 +1655,7 @@ def stock_in_page():
 
 
 # --- Transfer ---
-@app.route('/transfer', methods=['GET','POST'])
+@app.route('/transfer', methods=['GET', 'POST'])
 @require_login
 def transfer():
     user = current_user()
@@ -1663,41 +1663,38 @@ def transfer():
     stores = query_all("SELECT * FROM stores")
 
     if request.method == 'POST':
-
         from_store = request.form.get('from_store')
         to_store = request.form.get('to_store')
 
-        # ⭐ GET ALL PRODUCTS FROM THE TRANSFER TABLE
         product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
 
-        # VALIDATION
+        # Validation
         if from_store == to_store:
             flash("Source and destination store cannot be the same", "danger")
             return redirect(url_for('transfer'))
 
-        # ⭐ LOOP THROUGH ALL PRODUCTS IN THE TRANSFER
+        # Loop through all scanned products
         for product_id, qty in zip(product_ids, quantities):
-
             qty = int(qty)
 
-            # 1️⃣ DECREMENT FROM STORE
+            # Decrement from source store
             execute("""
-                UPDATE store_stock 
-                SET quantity = quantity - %s, updated_by=%s 
+                UPDATE store_stock
+                SET quantity = quantity - %s, updated_by=%s
                 WHERE product_id=%s AND store_id=%s
             """, (qty, user['id'], product_id, from_store))
 
-            # 2️⃣ INCREMENT TO STORE
+            # Increment destination store
             existing = query_one("""
-                SELECT id FROM store_stock 
+                SELECT id FROM store_stock
                 WHERE product_id=%s AND store_id=%s
             """, (product_id, to_store))
 
             if existing:
                 execute("""
-                    UPDATE store_stock 
-                    SET quantity = quantity + %s, updated_by=%s 
+                    UPDATE store_stock
+                    SET quantity = quantity + %s, updated_by=%s
                     WHERE id=%s
                 """, (qty, user['id'], existing['id']))
             else:
@@ -1706,24 +1703,25 @@ def transfer():
                     VALUES (%s, %s, %s, %s)
                 """, (to_store, product_id, qty, user['id']))
 
-            # 3️⃣ INSERT MOVEMENT ROW (ONE PER PRODUCT)
+            # Accurate movement logging (one per product)
             execute("""
-                INSERT INTO movements 
+                INSERT INTO movements
                 (product_id, movement_type, qty, from_store, to_store, created_by)
                 VALUES (%s, 'transfer', %s, %s, %s, %s)
             """, (product_id, qty, from_store, to_store, user['id']))
 
-            # 4️⃣ LOG ACTION
+            # Log action
             log_action(
-                user['id'], 
-                'transfer', 
-                f'Transferred product {product_id} qty {qty} from {from_store} to {to_store}'
+                user['id'],
+                'transfer',
+                f'Transferred product {product_id} qty {qty} from store {from_store} to {to_store}'
             )
 
-        flash('Transfer completed', 'success')
+        flash('Transfer completed successfully.', 'success')
         return redirect(url_for('transfer'))
 
     return render_template('transfer.html', products=products, stores=stores, user=user)
+
 
 
 # --- Movements ---
