@@ -1486,70 +1486,86 @@ def stock_in():
     stores = query_all("SELECT * FROM stores")
 
     if request.method == 'POST':
-        product_id = request.form.get('product_id')
+
+        # MULTI‑PRODUCT SUPPORT
+        product_ids = request.form.getlist('product_id[]')
+        quantities = request.form.getlist('quantity[]')
         store_id = request.form.get('store_id')
-        qty = int(request.form.get('quantity', 1))
 
-        # -----------------------------------------
-        # 1️⃣ GET WHOLESALE PRICE FOR COST CALCULATION
-        # -----------------------------------------
-        product = query_one(
-            "SELECT wholesale_price FROM products WHERE id=%s",
-            (product_id,)
-        )
-        wholesale = product['wholesale_price']
-        cost = qty * wholesale
+        # VALIDATION: store must be selected
+        if not store_id:
+            flash("Please select a store", "danger")
+            return redirect(url_for('stock_in'))
 
-        # -----------------------------------------
-        # 2️⃣ INSERT INTO stock_in TABLE (FINANCE COST)
-        #    ✔ matches your existing DB (no business_id)
-        # -----------------------------------------
-        execute("""
-            INSERT INTO stock_in (product_id, store_id, quantity, cost)
-            VALUES (%s, %s, %s, %s)
-        """, (product_id, store_id, qty, cost))
+        # LOOP THROUGH ALL SCANNED PRODUCTS
+        for pid, qty in zip(product_ids, quantities):
 
-        # -----------------------------------------
-        # 3️⃣ UPDATE STORE_STOCK (INVENTORY)
-        # -----------------------------------------
-        existing = query_one(
-            "SELECT id FROM store_stock WHERE product_id=%s AND store_id=%s",
-            (product_id, store_id)
-        )
+            qty = int(qty)
 
-        if existing:
+            # -----------------------------------------
+            # 1️⃣ GET WHOLESALE PRICE FOR COST CALCULATION
+            # -----------------------------------------
+            product = query_one(
+                "SELECT wholesale_price FROM products WHERE id=%s",
+                (pid,)
+            )
+
+            if not product:
+                continue  # safety fallback
+
+            wholesale = product['wholesale_price']
+            cost = qty * wholesale
+
+            # -----------------------------------------
+            # 2️⃣ INSERT INTO stock_in TABLE (FINANCE COST)
+            # -----------------------------------------
             execute("""
-                UPDATE store_stock
-                SET quantity = quantity + %s, updated_by=%s
-                WHERE id=%s
-            """, (qty, user['id'], existing['id']))
-        else:
-            execute("""
-                INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                INSERT INTO stock_in (product_id, store_id, quantity, cost)
                 VALUES (%s, %s, %s, %s)
-            """, (store_id, product_id, qty, user['id']))
+            """, (pid, store_id, qty, cost))
 
-        # -----------------------------------------
-        # 4️⃣ INSERT MOVEMENT LOG
-        # -----------------------------------------
-        execute("""
-            INSERT INTO movements (product_id, movement_type, qty, from_store, to_store, created_by)
-            VALUES (%s, 'stock_in', %s, NULL, %s, %s)
-        """, (product_id, qty, store_id, user['id']))
+            # -----------------------------------------
+            # 3️⃣ UPDATE STORE_STOCK (INVENTORY)
+            # -----------------------------------------
+            existing = query_one(
+                "SELECT id FROM store_stock WHERE product_id=%s AND store_id=%s",
+                (pid, store_id)
+            )
 
-        # -----------------------------------------
-        # 5️⃣ AUDIT LOG
-        # -----------------------------------------
-        log_action(
-            user['id'],
-            'stock_in',
-            f'Stock in product {product_id} qty {qty} to store {store_id}'
-        )
+            if existing:
+                execute("""
+                    UPDATE store_stock
+                    SET quantity = quantity + %s, updated_by=%s
+                    WHERE id=%s
+                """, (qty, user['id'], existing['id']))
+            else:
+                execute("""
+                    INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                    VALUES (%s, %s, %s, %s)
+                """, (store_id, pid, qty, user['id']))
 
-        flash('Stock received', 'success')
+            # -----------------------------------------
+            # 4️⃣ INSERT MOVEMENT LOG
+            # -----------------------------------------
+            execute("""
+                INSERT INTO movements (product_id, movement_type, qty, from_store, to_store, created_by)
+                VALUES (%s, 'stock_in', %s, NULL, %s, %s)
+            """, (pid, qty, store_id, user['id']))
+
+            # -----------------------------------------
+            # 5️⃣ AUDIT LOG
+            # -----------------------------------------
+            log_action(
+                user['id'],
+                'stock_in',
+                f'Stock in product {pid} qty {qty} to store {store_id}'
+            )
+
+        flash('Stock received successfully', 'success')
         return redirect(url_for('stock_in'))
 
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
 
 
 # --- Store Details ---

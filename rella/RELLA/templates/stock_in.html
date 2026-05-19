@@ -5,7 +5,6 @@
 <h1>Stock In</h1>
 
 <style>
-/* ===== Gold/Black Theme Buttons ===== */
 .btn-gold {
     background-color: #d4af37;
     color: black;
@@ -15,9 +14,7 @@
     cursor: pointer;
     font-weight: bold;
 }
-.btn-gold:hover {
-    background-color: #b8952f;
-}
+.btn-gold:hover { background-color: #b8952f; }
 
 .btn-black {
     background-color: black;
@@ -28,8 +25,24 @@
     cursor: pointer;
     font-weight: bold;
 }
-.btn-black:hover {
-    background-color: #222;
+.btn-black:hover { background-color: #222; }
+
+.scan-input {
+    width: 100%;
+    padding: 8px;
+    border: 2px solid #d4af37;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+th, td {
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
 }
 </style>
 
@@ -38,72 +51,165 @@
     Manual Mode
 </button>
 
-<form method="post" class="add-form">
+<form method="post" id="stockin-form">
 
-  <!-- Barcode -->
-  <label>Barcode:</label>
-  <input id="barcode-input" name="barcode" placeholder="Scan barcode" autofocus required>
+    <!-- SCAN BARCODE -->
+    <label>Barcode:</label>
+    <input id="barcode-input" class="scan-input" placeholder="Scan barcode..." autocomplete="off">
 
-  <!-- Product -->
-  <label>Product:</label>
-  <select name="product_id" required>
-    <option value="">Select Product</option>
-    {% for p in products %}
-      <option value="{{ p.id }}">{{ p.name }}</option>
-    {% endfor %}
-  </select>
+    <!-- STORE -->
+    <label>Store:</label>
+    <select name="store_id" id="storeSelect" class="scan-input" required>
+        <option value="">Select Store</option>
+        {% for s in stores %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+    </select>
 
-  <!-- Store -->
-  <label>Store:</label>
-  <select name="store_id" required>
-    <option value="">Select Store</option>
-    {% for s in stores %}
-      <option value="{{ s.id }}">{{ s.name }}</option>
-    {% endfor %}
-  </select>
+    <!-- HIDDEN PRODUCT LIST FOR BARCODE MATCHING -->
+    <select id="hiddenProductList" style="display:none;">
+        {% for p in products %}
+        <option value="{{ p.id }}" data-barcode="{{ p.barcode }}">{{ p.name }}</option>
+        {% endfor %}
+    </select>
 
-  <!-- Quantity -->
-  <label>Quantity:</label>
-  <input type="number" name="quantity" min="1" required>
+    <!-- PRODUCT TABLE -->
+    <table id="stockTable">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 
-  <button type="submit" class="btn-gold">Add Stock</button>
+    <button type="submit" id="submitBtn" class="btn-gold" style="margin-top: 15px;" disabled>
+        Add Stock
+    </button>
+
 </form>
 
 <script>
-let manualMode = false;
+document.addEventListener("DOMContentLoaded", function() {
 
-document.getElementById("toggleManual").addEventListener("click", function () {
-    manualMode = !manualMode;
+    const barcodeInput = document.getElementById("barcode-input");
+    const storeSelect = document.getElementById("storeSelect");
+    const tableBody = document.querySelector("#stockTable tbody");
+    const submitBtn = document.getElementById("submitBtn");
+    const hiddenList = document.getElementById("hiddenProductList");
 
-    if (manualMode) {
-        this.textContent = "Return to Scan Mode";
-    } else {
-        this.textContent = "Manual Mode";
-        focusScanner();
-    }
-});
+    let manualMode = false;
 
-function focusScanner() {
-    if (!manualMode) {
-        const barcodeInput = document.getElementById("barcode-input");
-        if (barcodeInput) {
+    /* ----------------------------------------------------
+       MANUAL MODE TOGGLE
+    ---------------------------------------------------- */
+    document.getElementById("toggleManual").addEventListener("click", function () {
+        manualMode = !manualMode;
+        this.textContent = manualMode ? "Return to Scan Mode" : "Manual Mode";
+        if (!manualMode) focusScanner();
+    });
+
+    function focusScanner() {
+        if (!manualMode) {
             barcodeInput.focus();
             barcodeInput.select();
         }
     }
-}
 
-document.addEventListener("DOMContentLoaded", function () {
     focusScanner();
 
     document.addEventListener("click", function (e) {
-        if (!manualMode) {
-            const barcodeInput = document.getElementById("barcode-input");
-            if (barcodeInput && !barcodeInput.contains(e.target)) {
-                focusScanner();
-            }
+        if (!manualMode && !barcodeInput.contains(e.target)) {
+            focusScanner();
         }
     });
+
+    /* ----------------------------------------------------
+       ADD PRODUCT ROW
+    ---------------------------------------------------- */
+    function addProduct(productId, productName) {
+        let existing = document.querySelector(`tr[data-id="${productId}"]`);
+
+        if (existing) {
+            existing.querySelector(".qty-input").focus();
+            return;
+        }
+
+        let row = document.createElement("tr");
+        row.setAttribute("data-id", productId);
+
+        row.innerHTML = `
+            <td>${productName}
+                <input type="hidden" name="product_id[]" value="${productId}">
+            </td>
+
+            <td>
+                <input type="number" name="quantity[]" class="qty-input" min="1" required placeholder="Qty">
+            </td>
+
+            <td>
+                <button type="button" class="btn-black remove-btn">X</button>
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+
+        row.querySelector(".remove-btn").addEventListener("click", () => {
+            row.remove();
+            validateForm();
+        });
+
+        row.querySelector(".qty-input").addEventListener("input", validateForm);
+
+        row.querySelector(".qty-input").focus();
+
+        validateForm();
+    }
+
+    /* ----------------------------------------------------
+       PROCESS SCAN
+    ---------------------------------------------------- */
+    function processScan(code) {
+        let option = [...hiddenList.options].find(o => o.dataset.barcode === code);
+
+        if (option) {
+            addProduct(option.value, option.textContent);
+        }
+    }
+
+    /* ----------------------------------------------------
+       SCAN ENGINE
+    ---------------------------------------------------- */
+    barcodeInput.addEventListener("keyup", function(e) {
+        if (e.key === "Enter") {
+            const code = barcodeInput.value.trim();
+            if (code.length > 0) processScan(code);
+            barcodeInput.value = "";
+            focusScanner();
+        }
+    });
+
+    /* ----------------------------------------------------
+       VALIDATION ENGINE
+    ---------------------------------------------------- */
+    function validateForm() {
+        let valid = true;
+
+        if (storeSelect.value === "") valid = false;
+
+        document.querySelectorAll(".qty-input").forEach(input => {
+            if (input.value.trim() === "" || parseInt(input.value) < 1) {
+                valid = false;
+            }
+        });
+
+        submitBtn.disabled = !valid;
+    }
+
+    storeSelect.addEventListener("change", validateForm);
+
 });
 </script>
 
