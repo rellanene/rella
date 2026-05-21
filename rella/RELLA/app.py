@@ -618,59 +618,50 @@ def dashboard():
     # ADMIN DASHBOARD
     # ============================================================
     else:
-
+    
         # PRODUCTS
         cursor.execute("""
             SELECT name, price
             FROM products
-            WHERE created_by = %s
-        """, (user_id,))
+        """)
         rows = cursor.fetchall() or []
         products_labels = [r["name"] for r in rows] or ["No products"]
         products_data = [float(r["price"] or 0) for r in rows] or [0]
-
+    
         # CLIENTS
         cursor.execute("""
             SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS total
             FROM clients
-            WHERE created_by = %s
             GROUP BY month
             ORDER BY month ASC
             LIMIT 6
-        """, (user_id,))
+        """)
         rows = cursor.fetchall() or []
         clients_labels = [r["month"] for r in rows] or ["No data"]
         clients_data = [r["total"] for r in rows] or [0]
-
+    
         # SALES RECORDS
         cursor.execute("""
             SELECT DATE(created_at) AS day, SUM(total) AS total
             FROM sales
-            WHERE created_by = %s
-              AND created_at >= DATE(NOW()) - INTERVAL 6 DAY
+            WHERE created_at >= DATE(NOW()) - INTERVAL 6 DAY
             GROUP BY day
             ORDER BY day ASC
-        """, (user_id,))
-        
+        """)
         rows = cursor.fetchall() or []
-        
-        # Build a dictionary for quick lookup
+    
         sales_map = {str(r["day"]): float(r["total"] or 0) for r in rows}
-        
-        # Generate last 7 days including today
+    
         from datetime import datetime, timedelta
-        
         records_labels = []
         records_data = []
-        
-        for i in range(6, -1, -1):  # 6 days ago → today
+    
+        for i in range(6, -1, -1):
             day = (datetime.now() - timedelta(days=i)).date()
             day_str = str(day)
-        
             records_labels.append(day_str)
             records_data.append(sales_map.get(day_str, 0))
-
-
+    
         # STORES STOCK LEVELS
         cursor.execute("""
             SELECT s.name AS store_name, SUM(ss.quantity) AS total_stock
@@ -680,32 +671,26 @@ def dashboard():
         """)
         rows = cursor.fetchall() or []
         stores_labels = [r["store_name"] for r in rows] or ["No Stores"]
-        stores_data = [float(r["total_stock"]) for r in rows] or [0.01]  # convert Decimal to float
-        
+        stores_data = [float(r["total_stock"] or 0) for r in rows] or [0.01]
+    
         # FINANCES SUMMARY
         cursor.execute("""
             SELECT 
-                (SELECT COALESCE(SUM(amount),0) FROM external_entries 
-                 WHERE entry_type='income' AND created_by=%s) AS income,
-                (SELECT COALESCE(SUM(amount),0) FROM external_entries 
-                 WHERE entry_type='expense' AND created_by=%s) AS expenses,
-                (SELECT COALESCE(SUM(cost),0) FROM stock_in 
-                 WHERE created_by=%s) AS stock_cost
-        """, (user_id, user_id, user_id))
+                (SELECT COALESCE(SUM(amount),0) FROM external_entries WHERE entry_type='income') AS income,
+                (SELECT COALESCE(SUM(amount),0) FROM external_entries WHERE entry_type='expense') AS expenses,
+                (SELECT COALESCE(SUM(cost),0) FROM stock_in) AS stock_cost
+        """)
         row = cursor.fetchone() or {}
-        
+    
         income = float(row.get("income", 0))
         expenses = float(row.get("expenses", 0))
         stock_cost = float(row.get("stock_cost", 0))
-        
-        # Chart.js cannot render all-zero pie
+    
         if income == 0 and expenses == 0 and stock_cost == 0:
             finances_data = [0.01, 0.01, 0.01]
         else:
             finances_data = [income, expenses, stock_cost]
-
-
-
+    
         return render_template(
             "dashboard.html",
             user=user,
@@ -719,6 +704,7 @@ def dashboard():
             stores_data=stores_data,
             finances_data=finances_data
         )
+
 
 
 # --- Products ---
