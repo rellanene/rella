@@ -20,6 +20,15 @@ app = Flask(__name__)
 WKHTML_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 config = pdfkit.configuration(wkhtmltopdf=WKHTML_PATH)
 
+import os
+
+def ensure_folders():
+    base = os.path.join(os.getenv("LOCALAPPDATA"), "RELLA", "uploads")
+    os.makedirs(os.path.join(base, "hr"), exist_ok=True)
+    os.makedirs(os.path.join(base, "tasks"), exist_ok=True)
+    os.makedirs(os.path.join(os.getenv("LOCALAPPDATA"), "RELLA", "finance_docs"), exist_ok=True)
+
+ensure_folders()
 
 
 
