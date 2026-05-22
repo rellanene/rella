@@ -2941,10 +2941,29 @@ def my_tasks():
 
     return render_template("tasks.html", users=users, tasks=rows)
 
+from flask import send_from_directory, abort
+import os
+
 @app.route("/uploads/tasks/<path:filename>")
 def download_task_file(filename):
+    # Always resolve paths relative to the app root (PyInstaller safe)
     directory = os.path.join(app.root_path, "uploads", "tasks")
-    return send_from_directory(directory, filename, as_attachment=True)
+
+    # Full file path
+    file_path = os.path.join(directory, filename)
+
+    # Check if file exists
+    if not os.path.isfile(file_path):
+        abort(404)
+
+    # Send file with correct MIME type
+    return send_from_directory(
+        directory,
+        filename,
+        as_attachment=True,
+        mimetype="application/pdf"
+    )
+
 
 
 #--------Comms main page
@@ -3755,10 +3774,21 @@ def admin_profile_update(user_id):
 from flask import send_from_directory
 import os
 
-@app.route('/hr/profile/download/<filename>')
+from flask import send_from_directory
+import os
+
+@app.route('/hr/profile/download/<path:filename>')
 def download_document(filename):
-    upload_dir = os.path.join("uploads")  # same folder where you save files
-    return send_from_directory(upload_dir, filename, as_attachment=True)
+    # Always resolve paths relative to the app root (PyInstaller safe)
+    upload_dir = os.path.join(app.root_path, "uploads")
+
+    return send_from_directory(
+        upload_dir,
+        filename,
+        as_attachment=True,
+        mimetype="application/pdf"
+    )
+
 
 from fpdf import FPDF
 import time
