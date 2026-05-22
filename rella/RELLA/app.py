@@ -172,11 +172,21 @@ def generate_invoice_no():
 def generate_task_no():
     return ''.join(random.choices(string.digits, k=6))
 
+import os
+from flask import send_from_directory
+
+UPLOAD_BASE = os.path.join(os.getenv("LOCALAPPDATA"), "RELLA", "uploads")
+
+@app.route("/uploads/<path:subpath>")
+def serve_uploads(subpath):
+    return send_from_directory(UPLOAD_BASE, subpath)
+
+
 
 
 @app.route("/")
 def home():
-    return redirect(url_for("human"))
+    return redirect(url_for("dashboard"))
 
 
 
