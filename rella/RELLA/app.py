@@ -3781,25 +3781,26 @@ import os
 
 @app.route('/hr/profile/download/<path:filename>')
 def download_document(filename):
-    # Resolve path safely relative to the app root (works in PyInstaller)
+    # Resolve path safely relative to the app root (PyInstaller safe)
     upload_dir = os.path.join(app.root_path, "uploads")
     file_path = os.path.join(upload_dir, filename)
 
-    # Verify file exists
+    # Check if file exists
     if not os.path.isfile(file_path):
         abort(404)
 
-    # Ensure filename ends with .pdf
+    # Ensure the file ends with .pdf
     if not filename.lower().endswith(".pdf"):
         filename = f"{filename}.pdf"
 
-    # Send file with correct MIME type
+    # Send file with correct PDF MIME type
     return send_from_directory(
         upload_dir,
         filename,
-        as_attachment=False,  # opens directly in default PDF app
+        as_attachment=False,      # opens directly in default PDF app
         mimetype="application/pdf"
     )
+
 
 
 
@@ -4117,13 +4118,19 @@ def get_income_statement():
 
 
 
+from flask import send_from_directory, abort, make_response
+import os
+
 @app.route("/finances/download/<int:file_id>")
 @login_required
 def finances_download(file_id):
     db = get_db()
     cursor = db.cursor(dictionary=True)
 
-    cursor.execute("SELECT stored_name, filename FROM finance_files WHERE id=%s", (file_id,))
+    cursor.execute(
+        "SELECT stored_name, filename FROM finance_files WHERE id=%s",
+        (file_id,)
+    )
     row = cursor.fetchone()
 
     if not row:
@@ -4131,12 +4138,32 @@ def finances_download(file_id):
         return redirect(url_for("human", tab="finances"))
 
     directory = os.path.join(app.root_path, "finance_docs")
-    return send_from_directory(
-        directory,
-        row["stored_name"],
-        as_attachment=True,
-        download_name=row["filename"]
+    file_path = os.path.join(directory, row["stored_name"])
+
+    if not os.path.isfile(file_path):
+        flash("File missing on server.", "error")
+        return redirect(url_for("human", tab="finances"))
+
+    # Ensure .pdf extension
+    download_name = row["filename"]
+    if not download_name.lower().endswith(".pdf"):
+        download_name = f"{download_name}.pdf"
+
+    # Build the response manually to force OS default PDF app
+    response = make_response(
+        send_from_directory(
+            directory,
+            row["stored_name"],
+            mimetype="application/pdf"
+        )
     )
+
+    # Force download instead of inline browser view
+    response.headers["Content-Disposition"] = f'attachment; filename="{download_name}"'
+    response.headers["Content-Type"] = "application/pdf"
+
+    return response
+
 
 
 
@@ -4383,11 +4410,26 @@ def finances_export_pdf():
 @require_login
 def finances_upload():
     user = current_user()
-    file = request.files['file']
+    file = request.files.get('file')
 
+    if not file or file.filename.strip() == "":
+        flash("No file selected.", "error")
+        return redirect(url_for('finances_page'))
+
+    # PyInstaller‑safe absolute path
+    upload_dir = os.path.join(app.root_path, "finance_docs")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Timestamped stored filename
     stored_name = f"{int(time.time())}_{file.filename}"
-    file.save(os.path.join("finance_docs", stored_name))
 
+    # Full save path
+    save_path = os.path.join(upload_dir, stored_name)
+
+    # Save file safely
+    file.save(save_path)
+
+    # Log into DB
     execute("""
         INSERT INTO finance_files (filename, stored_name, uploaded_by)
         VALUES (%s, %s, %s)
@@ -4395,6 +4437,7 @@ def finances_upload():
 
     flash("File uploaded successfully.", "success")
     return redirect(url_for('finances_page'))
+
 
 
 # --- Download financial file ---
