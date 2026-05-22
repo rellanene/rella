@@ -4118,8 +4118,9 @@ def get_income_statement():
 
 
 
-from flask import send_from_directory, abort, make_response
+from flask import send_file, abort
 import os
+import mimetypes
 
 @app.route("/finances/download/<int:file_id>")
 @login_required
@@ -4144,25 +4145,18 @@ def finances_download(file_id):
         flash("File missing on server.", "error")
         return redirect(url_for("human", tab="finances"))
 
-    # Ensure .pdf extension
-    download_name = row["filename"]
-    if not download_name.lower().endswith(".pdf"):
-        download_name = f"{download_name}.pdf"
+    # Detect MIME type automatically
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if mime_type is None:
+        mime_type = "application/octet-stream"  # fallback for unknown types
 
-    # Build the response manually to force OS default PDF app
-    response = make_response(
-        send_from_directory(
-            directory,
-            row["stored_name"],
-            mimetype="application/pdf"
-        )
+    # Force OS default app to open the file
+    return send_file(
+        file_path,
+        mimetype=mime_type,
+        as_attachment=True,              # forces download → OS opens it
+        download_name=row["filename"]    # correct filename
     )
-
-    # Force download instead of inline browser view
-    response.headers["Content-Disposition"] = f'attachment; filename="{download_name}"'
-    response.headers["Content-Type"] = "application/pdf"
-
-    return response
 
 
 
