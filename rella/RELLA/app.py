@@ -2988,7 +2988,8 @@ def download_task_file(filename):
     import os
     from flask import send_from_directory, abort
 
-    directory = os.path.join(app.root_path, "uploads", "tasks")
+    # APPROACH 2: Use the actual Program Files path
+    directory = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads\tasks"
 
     # Full path
     file_path = os.path.join(directory, filename)
@@ -3012,11 +3013,8 @@ def download_task_file(filename):
     if ext == "pdf":
         mimetype = "application/pdf"
     elif ext == "xlsx":
-        mimetype = (
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        # Fallback for unknown types
         mimetype = "application/octet-stream"
 
     return send_from_directory(
@@ -3026,6 +3024,7 @@ def download_task_file(filename):
         download_name=filename,
         mimetype=mimetype
     )
+
 
 
 
