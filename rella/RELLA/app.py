@@ -2956,23 +2956,46 @@ import os
 
 @app.route("/uploads/tasks/<path:filename>")
 def download_task_file(filename):
-    # Ensure the correct folder path (PyInstaller-safe)
+    import os
+    from flask import send_from_directory, abort
+
     directory = os.path.join(app.root_path, "uploads", "tasks")
+
+    # Full path
     file_path = os.path.join(directory, filename)
 
-    # Verify file exists
+    # If missing extension, try to find the real file
     if not os.path.isfile(file_path):
-        abort(404)
+        # Try PDF
+        if os.path.isfile(file_path + ".pdf"):
+            filename += ".pdf"
+            file_path = file_path + ".pdf"
+        # Try Excel
+        elif os.path.isfile(file_path + ".xlsx"):
+            filename += ".xlsx"
+            file_path = file_path + ".xlsx"
+        else:
+            abort(404)
 
-    # Force correct MIME type and extension
-    if not filename.lower().endswith(".pdf"):
-        filename = f"{filename}.pdf"
+    # Detect MIME type
+    ext = filename.lower().split(".")[-1]
+
+    if ext == "pdf":
+        mimetype = "application/pdf"
+    elif ext == "xlsx":
+        mimetype = (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        # Fallback for unknown types
+        mimetype = "application/octet-stream"
 
     return send_from_directory(
         directory,
         filename,
         as_attachment=True,
-        mimetype="application/pdf"
+        download_name=filename,
+        mimetype=mimetype
     )
 
 
@@ -3791,25 +3814,48 @@ import os
 
 @app.route('/hr/profile/download/<path:filename>')
 def download_document(filename):
-    # Resolve path safely relative to the app root (PyInstaller safe)
+    import os
+    from flask import send_from_directory, abort
+
+    # Base uploads folder
     upload_dir = os.path.join(app.root_path, "uploads")
     file_path = os.path.join(upload_dir, filename)
 
-    # Check if file exists
+    # If file without extension was passed, try to detect the real file
     if not os.path.isfile(file_path):
-        abort(404)
+        # Try common extensions
+        for ext in [".pdf", ".xlsx", ".xls", ".docx", ".doc", ".png", ".jpg", ".jpeg"]:
+            if os.path.isfile(file_path + ext):
+                filename = filename + ext
+                file_path = file_path + ext
+                break
+        else:
+            abort(404)
 
-    # Ensure the file ends with .pdf
-    if not filename.lower().endswith(".pdf"):
-        filename = f"{filename}.pdf"
+    # Detect MIME type
+    ext = filename.lower().split(".")[-1]
 
-    # Send file with correct PDF MIME type
+    mime_map = {
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc": "application/msword",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+    }
+
+    mimetype = mime_map.get(ext, "application/octet-stream")
+
     return send_from_directory(
         upload_dir,
         filename,
-        as_attachment=False,      # opens directly in default PDF app
-        mimetype="application/pdf"
+        as_attachment=False,          # open directly in default app
+        download_name=filename,
+        mimetype=mimetype
     )
+
 
 
 
