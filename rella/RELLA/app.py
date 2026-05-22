@@ -173,13 +173,42 @@ def generate_task_no():
     return ''.join(random.choices(string.digits, k=6))
 
 import os
-from flask import send_from_directory
+from flask import send_from_directory, abort
 
 UPLOAD_BASE = os.path.join(os.getenv("LOCALAPPDATA"), "RELLA", "uploads")
 
 @app.route("/uploads/<path:subpath>")
 def serve_uploads(subpath):
-    return send_from_directory(UPLOAD_BASE, subpath)
+    # Resolve full path
+    file_path = os.path.join(UPLOAD_BASE, subpath)
+
+    # Verify file exists
+    if not os.path.isfile(file_path):
+        abort(404)
+
+    # Detect MIME type dynamically
+    ext = subpath.lower().split(".")[-1]
+    mime_map = {
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc": "application/msword",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+    }
+    mimetype = mime_map.get(ext, "application/octet-stream")
+
+    # Serve file with correct MIME type
+    return send_from_directory(
+        UPLOAD_BASE,
+        subpath,
+        as_attachment=False,      # opens directly in default app
+        download_name=subpath,
+        mimetype=mimetype
+    )
+
 
 
 
