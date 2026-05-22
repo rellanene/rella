@@ -2946,23 +2946,25 @@ import os
 
 @app.route("/uploads/tasks/<path:filename>")
 def download_task_file(filename):
-    # Always resolve paths relative to the app root (PyInstaller safe)
+    # Ensure the correct folder path (PyInstaller-safe)
     directory = os.path.join(app.root_path, "uploads", "tasks")
-
-    # Full file path
     file_path = os.path.join(directory, filename)
 
-    # Check if file exists
+    # Verify file exists
     if not os.path.isfile(file_path):
         abort(404)
 
-    # Send file with correct MIME type
+    # Force correct MIME type and extension
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{filename}.pdf"
+
     return send_from_directory(
         directory,
         filename,
         as_attachment=True,
         mimetype="application/pdf"
     )
+
 
 
 
@@ -3774,20 +3776,31 @@ def admin_profile_update(user_id):
 from flask import send_from_directory
 import os
 
-from flask import send_from_directory
+from flask import send_from_directory, abort
 import os
 
 @app.route('/hr/profile/download/<path:filename>')
 def download_document(filename):
-    # Always resolve paths relative to the app root (PyInstaller safe)
+    # Resolve path safely relative to the app root (works in PyInstaller)
     upload_dir = os.path.join(app.root_path, "uploads")
+    file_path = os.path.join(upload_dir, filename)
 
+    # Verify file exists
+    if not os.path.isfile(file_path):
+        abort(404)
+
+    # Ensure filename ends with .pdf
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{filename}.pdf"
+
+    # Send file with correct MIME type
     return send_from_directory(
         upload_dir,
         filename,
-        as_attachment=True,
+        as_attachment=False,  # opens directly in default PDF app
         mimetype="application/pdf"
     )
+
 
 
 from fpdf import FPDF
