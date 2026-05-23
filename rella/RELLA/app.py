@@ -3089,14 +3089,50 @@ def comms_email_thread(thread_id):
 @app.route("/email/download/<path:filename>")
 @login_required
 def email_download(filename):
-    directory = os.path.join(app.root_path, "static", "uploads", "email")
+    import os
+    from flask import send_from_directory, abort, flash, redirect, url_for
 
+    # APPROACH 2: Use the actual Program Files path
+    directory = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\static\uploads\email"
+
+    # Full path
     file_path = os.path.join(directory, filename)
-    if not os.path.exists(file_path):
-        flash("Attachment not found.", "error")
-        return redirect(url_for("comms_page"))
 
-    return send_from_directory(directory, filename, as_attachment=True)
+    # If file without extension was passed, try to detect the real file
+    if not os.path.isfile(file_path):
+        for ext in [".pdf", ".xlsx", ".xls", ".docx", ".doc", ".png", ".jpg", ".jpeg"]:
+            if os.path.isfile(file_path + ext):
+                filename = filename + ext
+                file_path = file_path + ext
+                break
+        else:
+            flash("Attachment not found.", "error")
+            return redirect(url_for("comms_page"))
+
+    # Detect MIME type
+    ext = filename.lower().split(".")[-1]
+
+    mime_map = {
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc": "application/msword",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+    }
+
+    mimetype = mime_map.get(ext, "application/octet-stream")
+
+    return send_from_directory(
+        directory,
+        filename,
+        as_attachment=True,
+        download_name=filename,
+        mimetype=mimetype
+    )
+
 
 
 
