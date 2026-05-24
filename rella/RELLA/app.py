@@ -762,23 +762,39 @@ def dashboard():
 def products():
     user = current_user()
 
-    # Add product
     if request.method == 'POST':
         barcode = request.form.get('barcode')
         name = request.form.get('name')
         wholesale = request.form.get('wholesale') or 0
         retail = request.form.get('retail') or 0
 
-        execute("""
-            INSERT INTO products (barcode, name, wholesale_price, retail_price, created_by)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (barcode, name, wholesale, retail, user['id']))
+        db = get_db()  # ensure we can rollback
 
-        log_action(user['id'], 'add_product', f'Added product {name} ({barcode})')
-        flash('Product added', 'success')
+        try:
+            execute("""
+                INSERT INTO products (barcode, name, wholesale_price, retail_price, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (barcode, name, wholesale, retail, user['id']))
+
+            log_action(user['id'], 'add_product', f'Added product {name} ({barcode})')
+            flash('Product added successfully', 'success')
+
+        except mysql.connector.errors.IntegrityError as e:
+            db.rollback()   # CRITICAL: release lock immediately
+
+            if e.errno == 1062:
+                flash(f"Barcode {barcode} already exists.", "error")
+            else:
+                flash("Database error occurred while adding product.", "error")
+
+        except Exception:
+            db.rollback()
+            flash("Unexpected error occurred.", "error")
+
+        # CRITICAL: ALWAYS return something
         return redirect(url_for('products'))
 
-    # Search
+    # GET request → list products
     q = request.args.get('q','')
     if q:
         rows = query_all("""
@@ -799,6 +815,7 @@ def products():
         """)
 
     return render_template('products.html', products=rows, user=user)
+
 
 
 @app.route('/products/edit/<int:pid>', methods=['POST'])
