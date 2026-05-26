@@ -903,11 +903,26 @@ def delete_product(pid):
         flash('Permission denied', 'error')
         return redirect(url_for('products'))
 
-    execute("DELETE FROM products WHERE id=%s", (pid,))
-    log_action(user['id'], 'delete_product', f'Deleted product {pid}')
+    try:
+        # Attempt to delete the product
+        execute("DELETE FROM products WHERE id=%s", (pid,))
+        log_action(user['id'], 'delete_product', f'Deleted product {pid}')
+        flash('Product deleted successfully', 'success')
 
-    flash('Product deleted successfully', 'success')
+    except mysql.connector.errors.IntegrityError:
+        # Product is linked to sale_items → cannot delete
+        flash('You cannot delete this product because it has sales history.', 'error')
+        log_action(user['id'], 'delete_product_blocked',
+                   f'Blocked delete for product {pid} due to sales history')
+
+    except Exception as e:
+        # Any unexpected error
+        flash('An unexpected error occurred while deleting the product.', 'error')
+        log_action(user['id'], 'delete_product_error',
+                   f'Error deleting product {pid}: {str(e)}')
+
     return redirect(url_for('products'))
+
 
 
 # --- Clients ---
