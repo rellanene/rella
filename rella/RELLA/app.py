@@ -1734,6 +1734,7 @@ def stock_in_page():
     if request.method == 'POST':
 
         store_id = request.form.get('store_id')
+        is_return = request.form.get('is_return', '0')  # NEW
 
         product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
@@ -1742,7 +1743,49 @@ def stock_in_page():
 
             qty = int(qty)
 
-            # 1️⃣ UPDATE STOCK
+            # ----------------------------------------------------
+            # RETURN MODE (FIXED: stock must INCREASE)
+            # ----------------------------------------------------
+            if is_return == "1":
+
+                # 1️⃣ INCREASE STOCK (product is coming back)
+                existing = query_one("""
+                    SELECT id, quantity FROM store_stock 
+                    WHERE product_id=%s AND store_id=%s
+                """, (product_id, store_id))
+
+                if existing:
+                    new_qty = existing['quantity'] + qty
+                    execute("""
+                        UPDATE store_stock 
+                        SET quantity = %s, updated_by=%s 
+                        WHERE id=%s
+                    """, (new_qty, user['id'], existing['id']))
+                else:
+                    # If no record exists, create it with the returned qty
+                    execute("""
+                        INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                        VALUES (%s, %s, %s, %s)
+                    """, (store_id, product_id, qty, user['id']))
+
+                # 2️⃣ MOVEMENT LOG
+                execute("""
+                    INSERT INTO movements 
+                    (product_id, movement_type, qty, to_store, created_by)
+                    VALUES (%s, 'return', %s, %s, %s)
+                """, (product_id, qty, store_id, user['id']))
+
+                # 3️⃣ RETURNS TABLE
+                execute("""
+                    INSERT INTO returns (product_id, store_id, qty, returned_by)
+                    VALUES (%s, %s, %s, %s)
+                """, (product_id, store_id, qty, user['id']))
+
+                continue  # Skip normal stock-in logic
+
+            # ----------------------------------------------------
+            # NORMAL STOCK-IN MODE
+            # ----------------------------------------------------
             existing = query_one("""
                 SELECT id FROM store_stock 
                 WHERE product_id=%s AND store_id=%s
@@ -1760,17 +1803,24 @@ def stock_in_page():
                     VALUES (%s, %s, %s, %s)
                 """, (store_id, product_id, qty, user['id']))
 
-            # 2️⃣ MOVEMENT LOG
+            # MOVEMENT LOG
             execute("""
                 INSERT INTO movements 
                 (product_id, movement_type, qty, to_store, created_by)
                 VALUES (%s, 'stock_in', %s, %s, %s)
             """, (product_id, qty, store_id, user['id']))
 
-        flash("Stock-in completed", "success")
-        return redirect(url_for('stock_in_page'))   # ⭐ FIXED
+        # SUCCESS MESSAGE
+        if is_return == "1":
+            flash("Return processed successfully", "success")
+        else:
+            flash("Stock-in completed", "success")
+
+        return redirect(url_for('stock_in_page'))
 
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
+
 
 
 
@@ -1841,6 +1891,41 @@ def transfer():
         return redirect(url_for('transfer'))
 
     return render_template('transfer.html', products=products, stores=stores, user=user)
+
+@app.route('/returns/process', methods=['POST'])
+@require_login
+def process_return():
+    user = current_user()
+
+    store_id = request.form.get("store_id")
+    product_ids = request.form.getlist("product_id[]")
+    quantities = request.form.getlist("quantity[]")
+
+    for pid, qty in zip(product_ids, quantities):
+        qty = int(qty)
+
+        # 1. Increase stock back (return)
+        execute("""
+            UPDATE stock 
+            SET quantity = quantity + %s 
+            WHERE product_id=%s AND store_id=%s
+        """, (qty, pid, store_id))
+
+        # 2. Log movement
+        execute("""
+            INSERT INTO stock_movement (product_id, store_id, quantity, movement_type, user_id)
+            VALUES (%s, %s, %s, 'RETURN', %s)
+        """, (pid, store_id, qty, user['id']))
+
+        # 3. Insert into returns table
+        execute("""
+            INSERT INTO returns (product_id, store_id, quantity, returned_by)
+            VALUES (%s, %s, %s, %s)
+        """, (pid, store_id, qty, user['id']))
+
+    flash("Return processed successfully", "success")
+    return redirect(url_for('stock_in'))
+
 
 
 

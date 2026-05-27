@@ -51,7 +51,16 @@ th, td {
     Manual Mode
 </button>
 
-<form method="post" id="stockin-form">
+<!-- Return Mode Toggle -->
+<button id="toggleReturn" class="btn-black" style="margin-bottom: 12px; margin-left: 10px;">
+    Return Mode
+</button>
+
+<form method="post" id="stockin-form" action="/stock_in">
+
+
+    <!-- Hidden field for backend -->
+    <input type="hidden" name="is_return" id="isReturnField" value="0">
 
     <!-- SCAN BARCODE -->
     <label>Barcode:</label>
@@ -92,7 +101,6 @@ th, td {
 </form>
 
 <script>
-	
 document.addEventListener("DOMContentLoaded", function() {
 
     const barcodeInput = document.getElementById("barcode-input");
@@ -102,6 +110,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const hiddenList = document.getElementById("hiddenProductList");
 
     let manualMode = false;
+    let returnMode = false;
 
     /* ----------------------------------------------------
        MANUAL MODE TOGGLE
@@ -125,6 +134,19 @@ document.addEventListener("DOMContentLoaded", function() {
         if (!manualMode && !barcodeInput.contains(e.target)) {
             focusScanner();
         }
+    });
+
+    /* ----------------------------------------------------
+       RETURN MODE TOGGLE
+    ---------------------------------------------------- */
+    document.getElementById("toggleReturn").addEventListener("click", function () {
+        returnMode = !returnMode;
+
+        this.textContent = returnMode ? "Return Mode: ON" : "Return Mode";
+
+        document.getElementById("isReturnField").value = returnMode ? "1" : "0";
+
+        Rella.toast(returnMode ? "Return Mode Enabled" : "Return Mode Disabled", "info");
     });
 
     /* ----------------------------------------------------
@@ -175,7 +197,14 @@ document.addEventListener("DOMContentLoaded", function() {
     function processScan(code) {
         let option = [...hiddenList.options].find(o => o.dataset.barcode === code);
 
-        if (option) {
+        if (!option) {
+            Rella.toast("Product not found", "error");
+            return;
+        }
+
+        if (returnMode) {
+            addProduct(option.value, option.textContent + " (RETURN)");
+        } else {
             addProduct(option.value, option.textContent);
         }
     }
@@ -212,11 +241,6 @@ document.addEventListener("DOMContentLoaded", function() {
     storeSelect.addEventListener("change", validateForm);
 
 });
-
 </script>
-<script>
-RELLA.toast("Stock added", "success");
-</script>
-
 
 {% endblock %}
