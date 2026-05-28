@@ -1625,7 +1625,7 @@ def stock_in():
                         WHERE id=%s
                     """, (new_qty, user['id'], existing['id']))
 
-                # SAVE AS 'adjustment' (we will display it as 'Removed')
+                # SAVE AS 'adjustment' (displayed as Removed)
                 execute("""
                     INSERT INTO movements (product_id, movement_type, qty, from_store, created_by)
                     VALUES (%s, 'adjustment', %s, %s, %s)
@@ -1699,6 +1699,7 @@ def stock_in():
             wholesale = product['wholesale_price']
             cost = qty * wholesale
 
+            # ⭐ FIX: remove business_id (your DB does not have it)
             execute("""
                 INSERT INTO stock_in (product_id, store_id, quantity, cost)
                 VALUES (%s, %s, %s, %s)
@@ -1736,6 +1737,7 @@ def stock_in():
         return redirect(url_for('stock_in'))
 
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
 
 
 
