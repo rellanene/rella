@@ -1582,7 +1582,7 @@ def stores():
 # --- Stock in ---
 # --- Stock in ---
 # --- Stock in ---
-@app.route('/stock-in', methods=['GET','POST'])
+@app.route('/stock_in', methods=['GET','POST'])
 @require_login
 def stock_in():
     user = current_user()
@@ -1591,50 +1591,123 @@ def stock_in():
 
     if request.method == 'POST':
 
-        # MULTI‑PRODUCT SUPPORT
         product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
         store_id = request.form.get('store_id')
 
-        # VALIDATION: store must be selected
+        is_return = request.form.get("is_return", "0")
+        is_remove = request.form.get("is_remove", "0")
+
         if not store_id:
             flash("Please select a store", "danger")
             return redirect(url_for('stock_in'))
 
-        # LOOP THROUGH ALL SCANNED PRODUCTS
+        # ----------------------------------------------------
+        # REMOVE MODE (stock decreases)
+        # ----------------------------------------------------
+        if is_remove == "1":
+
+            for pid, qty in zip(product_ids, quantities):
+
+                qty = int(qty)
+
+                existing = query_one("""
+                    SELECT id, quantity FROM store_stock
+                    WHERE product_id=%s AND store_id=%s
+                """, (pid, store_id))
+
+                if existing:
+                    new_qty = max(existing['quantity'] - qty, 0)
+
+                    execute("""
+                        UPDATE store_stock
+                        SET quantity=%s, updated_by=%s
+                        WHERE id=%s
+                    """, (new_qty, user['id'], existing['id']))
+
+                # SAVE AS 'adjustment' (we will display it as 'Removed')
+                execute("""
+                    INSERT INTO movements (product_id, movement_type, qty, from_store, created_by)
+                    VALUES (%s, 'adjustment', %s, %s, %s)
+                """, (pid, qty, store_id, user['id']))
+
+                log_action(
+                    user['id'],
+                    'adjustment',
+                    f'Removed product {pid} qty {qty} from store {store_id}'
+                )
+
+            flash("Product removed successfully", "success")
+            return redirect(url_for('stock_in'))
+
+        # ----------------------------------------------------
+        # RETURN MODE (stock increases)
+        # ----------------------------------------------------
+        if is_return == "1":
+
+            for pid, qty in zip(product_ids, quantities):
+
+                qty = int(qty)
+
+                existing = query_one("""
+                    SELECT id, quantity FROM store_stock
+                    WHERE product_id=%s AND store_id=%s
+                """, (pid, store_id))
+
+                if existing:
+                    new_qty = existing['quantity'] + qty
+                    execute("""
+                        UPDATE store_stock
+                        SET quantity=%s, updated_by=%s
+                        WHERE id=%s
+                    """, (new_qty, user['id'], existing['id']))
+                else:
+                    execute("""
+                        INSERT INTO store_stock (store_id, product_id, quantity, updated_by)
+                        VALUES (%s, %s, %s, %s)
+                    """, (store_id, pid, qty, user['id']))
+
+                execute("""
+                    INSERT INTO movements (product_id, movement_type, qty, to_store, created_by)
+                    VALUES (%s, 'return', %s, %s, %s)
+                """, (pid, qty, store_id, user['id']))
+
+                log_action(
+                    user['id'],
+                    'return',
+                    f'Returned product {pid} qty {qty} to store {store_id}'
+                )
+
+            flash("Return processed successfully", "success")
+            return redirect(url_for('stock_in'))
+
+        # ----------------------------------------------------
+        # NORMAL STOCK-IN MODE
+        # ----------------------------------------------------
         for pid, qty in zip(product_ids, quantities):
 
             qty = int(qty)
 
-            # -----------------------------------------
-            # 1️⃣ GET WHOLESALE PRICE FOR COST CALCULATION
-            # -----------------------------------------
             product = query_one(
                 "SELECT wholesale_price FROM products WHERE id=%s",
                 (pid,)
             )
 
             if not product:
-                continue  # safety fallback
+                continue
 
             wholesale = product['wholesale_price']
             cost = qty * wholesale
 
-            # -----------------------------------------
-            # 2️⃣ INSERT INTO stock_in TABLE (FINANCE COST)
-            # -----------------------------------------
             execute("""
                 INSERT INTO stock_in (product_id, store_id, quantity, cost)
                 VALUES (%s, %s, %s, %s)
             """, (pid, store_id, qty, cost))
 
-            # -----------------------------------------
-            # 3️⃣ UPDATE STORE_STOCK (INVENTORY)
-            # -----------------------------------------
-            existing = query_one(
-                "SELECT id FROM store_stock WHERE product_id=%s AND store_id=%s",
-                (pid, store_id)
-            )
+            existing = query_one("""
+                SELECT id FROM store_stock
+                WHERE product_id=%s AND store_id=%s
+            """, (pid, store_id))
 
             if existing:
                 execute("""
@@ -1648,17 +1721,11 @@ def stock_in():
                     VALUES (%s, %s, %s, %s)
                 """, (store_id, pid, qty, user['id']))
 
-            # -----------------------------------------
-            # 4️⃣ INSERT MOVEMENT LOG
-            # -----------------------------------------
             execute("""
-                INSERT INTO movements (product_id, movement_type, qty, from_store, to_store, created_by)
-                VALUES (%s, 'stock_in', %s, NULL, %s, %s)
+                INSERT INTO movements (product_id, movement_type, qty, to_store, created_by)
+                VALUES (%s, 'stock_in', %s, %s, %s)
             """, (pid, qty, store_id, user['id']))
 
-            # -----------------------------------------
-            # 5️⃣ AUDIT LOG
-            # -----------------------------------------
             log_action(
                 user['id'],
                 'stock_in',
@@ -1669,6 +1736,55 @@ def stock_in():
         return redirect(url_for('stock_in'))
 
     return render_template('stock_in.html', products=products, stores=stores, user=user)
+
+
+
+
+@app.route('/remove_stock', methods=['POST'])
+@require_login
+def remove_stock():
+    user = current_user()
+
+    product_ids = request.form.getlist('product_id[]')
+    quantities = request.form.getlist('quantity[]')
+    store_id = request.form.get('store_id')
+
+    for pid, qty in zip(product_ids, quantities):
+
+        qty = int(qty)
+
+        # 1️⃣ FETCH EXISTING STOCK
+        existing = query_one("""
+            SELECT id, quantity FROM store_stock
+            WHERE product_id=%s AND store_id=%s
+        """, (pid, store_id))
+
+        if existing:
+            new_qty = max(existing['quantity'] - qty, 0)
+
+            execute("""
+                UPDATE store_stock
+                SET quantity=%s, updated_by=%s
+                WHERE id=%s
+            """, (new_qty, user['id'], existing['id']))
+
+        # 2️⃣ MOVEMENT LOG
+        execute("""
+            INSERT INTO movements (product_id, movement_type, qty, from_store, created_by)
+            VALUES (%s, 'removed', %s, %s, %s)
+        """, (pid, qty, store_id, user['id']))
+
+        # 3️⃣ AUDIT LOG
+        log_action(
+            user['id'],
+            'removed',
+            f'Removed product {pid} qty {qty} from store {store_id}'
+        )
+
+    flash("Product removed successfully", "success")
+    return redirect(url_for('stock_in'))
+
+
 
 
 

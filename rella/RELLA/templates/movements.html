@@ -4,15 +4,15 @@
 <h1>Movements</h1>
 
 <style>
-	/* ===== Premium Full Row Hover (Stable) ===== */
-	.data-table tbody tr {
-	    transition: background-color 0.15s ease-in-out;
-	}
+    /* ===== Premium Full Row Hover (Stable) ===== */
+    .data-table tbody tr {
+        transition: background-color 0.15s ease-in-out;
+    }
 
-	.data-table tbody tr:hover,
-	.data-table tbody tr:hover td {
-	    background-color: #fdf6e3 !important;  /* soft premium cream */
-	}
+    .data-table tbody tr:hover,
+    .data-table tbody tr:hover td {
+        background-color: #fdf6e3 !important;  /* soft premium cream */
+    }
     .btn-gold {
         background-color: #d4af37;
         color: #000;
@@ -90,10 +90,18 @@
             <td>{{ m.created_at }}</td>
             <td>{{ m.user_name }}</td>
             <td>{{ m.product_name }}</td>
-            <td>{{ m.movement_type }}</td>
+
+            <!-- ⭐ FIXED: Show 'Removed' when movement_type = adjustment -->
+            <td>
+                {% if m.movement_type == 'adjustment' %}
+                    Removed
+                {% else %}
+                    {{ m.movement_type }}
+                {% endif %}
+            </td>
+
             <td>{{ m.qty }}</td>
 
-            <!-- FIX: Show proper store names -->
             <td>{{ m.from_store if m.from_store else "-" }}</td>
             <td>{{ m.to_store if m.to_store else "-" }}</td>
 

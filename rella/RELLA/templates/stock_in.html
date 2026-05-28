@@ -56,11 +56,16 @@ th, td {
     Return Mode
 </button>
 
+<!-- Remove Mode Toggle -->
+<button id="toggleRemove" class="btn-black" style="margin-bottom: 12px; margin-left: 10px;">
+    Remove Product
+</button>
+
 <form method="post" id="stockin-form" action="/stock_in">
 
-
-    <!-- Hidden field for backend -->
+    <!-- Hidden fields for backend -->
     <input type="hidden" name="is_return" id="isReturnField" value="0">
+    <input type="hidden" name="is_remove" id="isRemoveField" value="0">
 
     <!-- SCAN BARCODE -->
     <label>Barcode:</label>
@@ -111,6 +116,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     let manualMode = false;
     let returnMode = false;
+    let removeMode = false;
 
     /* ----------------------------------------------------
        MANUAL MODE TOGGLE
@@ -141,12 +147,31 @@ document.addEventListener("DOMContentLoaded", function() {
     ---------------------------------------------------- */
     document.getElementById("toggleReturn").addEventListener("click", function () {
         returnMode = !returnMode;
+        removeMode = false;
 
         this.textContent = returnMode ? "Return Mode: ON" : "Return Mode";
+        document.getElementById("toggleRemove").textContent = "Remove Product";
 
         document.getElementById("isReturnField").value = returnMode ? "1" : "0";
+        document.getElementById("isRemoveField").value = "0";
 
         Rella.toast(returnMode ? "Return Mode Enabled" : "Return Mode Disabled", "info");
+    });
+
+    /* ----------------------------------------------------
+       REMOVE MODE TOGGLE
+    ---------------------------------------------------- */
+    document.getElementById("toggleRemove").addEventListener("click", function () {
+        removeMode = !removeMode;
+        returnMode = false;
+
+        this.textContent = removeMode ? "Remove Mode: ON" : "Remove Product";
+        document.getElementById("toggleReturn").textContent = "Return Mode";
+
+        document.getElementById("isRemoveField").value = removeMode ? "1" : "0";
+        document.getElementById("isReturnField").value = "0";
+
+        Rella.toast(removeMode ? "Remove Mode Enabled" : "Remove Mode Disabled", "info");
     });
 
     /* ----------------------------------------------------
@@ -202,9 +227,13 @@ document.addEventListener("DOMContentLoaded", function() {
             return;
         }
 
-        if (returnMode) {
+        if (removeMode) {
+            addProduct(option.value, option.textContent + " (REMOVE)");
+        }
+        else if (returnMode) {
             addProduct(option.value, option.textContent + " (RETURN)");
-        } else {
+        }
+        else {
             addProduct(option.value, option.textContent);
         }
     }
