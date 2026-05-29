@@ -379,6 +379,48 @@
 </form>
 
 <script>
+	document.getElementById("pos-form").addEventListener("submit", function(e) {
+	    // STOP EVERYTHING IMMEDIATELY
+	    e.preventDefault();
+	    e.stopImmediatePropagation();
+
+	    let store = document.querySelector("[name='store_id']").value;
+	    let client = document.querySelector("[name='client_id']").value;
+	    let method = document.querySelector("[name='payment_method']").value;
+	    let cash = document.getElementById("cashReceived").value;
+	    let cartRows = document.querySelectorAll("#cartTable tbody tr").length;
+
+	    // VALIDATION
+	    if (!store) {
+	        window.RELLA.toast("Please select a store", "error");
+	        return;
+	    }
+
+	    if (!client) {
+	        window.RELLA.toast("Please select a client", "error");
+	        return;
+	    }
+
+	    if (cartRows === 0) {
+	        window.RELLA.toast("Your cart is empty. Add at least one product.", "error");
+	        return;
+	    }
+
+	    if (!method) {
+	        window.RELLA.toast("Please select a payment method", "error");
+	        return;
+	    }
+
+	    if (method === "cash") {
+	        if (!cash || isNaN(cash) || Number(cash) <= 0) {
+	            window.RELLA.toast("Enter valid cash received", "error");
+	            return;
+	        }
+	    }
+
+	    // ONLY IF EVERYTHING IS VALID → SHOW CONFIRM MODAL
+	    document.getElementById("confirmModal").style.display = "flex";
+	});
 	
 	function buildThermalReceipt(invoiceNo, items, subtotal, vat, total, method, cash, change) {
 

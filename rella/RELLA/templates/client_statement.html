@@ -61,23 +61,24 @@
             <th>Running Balance</th>
         </tr>
     </thead>
-    <tbody>
-        {% for t in timeline %}
-        <tr>
-            <td>{{ t.date }}</td>
-            <td>{{ t.type|capitalize }}</td>
-            <td>{{ t.ref }}</td>
-            <td>
-                {% if t.type == 'invoice' %}
-                    <span style="color:red;">R {{ t.amount }}</span>
-                {% else %}
-                    <span style="color:green;">R -{{ t.amount }}</span>
-                {% endif %}
-            </td>
-            <td><strong>R {{ t.balance }}</strong></td>
-        </tr>
-        {% endfor %}
-    </tbody>
+<tbody>
+    {% for t in timeline|reverse %}
+    <tr>
+        <td>{{ t.date }}</td>
+        <td>{{ t.type|capitalize }}</td>
+        <td>{{ t.ref }}</td>
+        <td>
+            {% if t.type == 'invoice' %}
+                <span style="color:red;">R {{ t.amount }}</span>
+            {% else %}
+                <span style="color:green;">R -{{ t.amount }}</span>
+            {% endif %}
+        </td>
+        <td><strong>R {{ t.balance }}</strong></td>
+    </tr>
+    {% endfor %}
+</tbody>
+
 </table>
 
 {% endblock %}
