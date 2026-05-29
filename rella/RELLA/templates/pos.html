@@ -5,6 +5,24 @@
 <h1>Point of Sale</h1>
 
 <style>
+	@media print {
+	    body * {
+	        visibility: hidden !important;
+	    }
+	    #thermalReceipt, #thermalReceipt * {
+	        visibility: visible !important;
+	    }
+	    #thermalReceipt {
+	        position: absolute;
+	        top: 0;
+	        left: 0;
+	        width: 58mm;
+	        padding: 0;
+	        margin: 0;
+	    }
+	}
+
+
     .pos-wrapper {
         display: grid;
         grid-template-columns: 2fr 1.2fr;
@@ -19,6 +37,20 @@
         border: 1px solid #e5e5e5;
         box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     }
+	@media print {
+	    body * {
+	        visibility: hidden;
+	    }
+	    #cartTable, #cartTable * {
+	        visibility: visible;
+	    }
+	    #cartTable {
+	        position: absolute;
+	        top: 0;
+	        left: 0;
+	    }
+	}
+
 
     .pos-panel h2, .pos-panel h3 {
         margin-top: 0;
@@ -144,6 +176,9 @@
     }
 </style>
 
+<script src="https://cdn.jsdelivr.net/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+
+
 <form method="POST" action="{{ url_for('pos_submit') }}" id="pos-form">
 
 <div class="pos-wrapper">
@@ -156,6 +191,7 @@
         <button type="button" id="toggleFocusBtn" class="btn-black" style="margin-bottom:10px;">
             Manual Mode: OFF
         </button>
+		<br>
 
         <!-- Store -->
         <label>Store:</label>
@@ -168,7 +204,7 @@
         <!-- Client -->
 		<label>Client:</label>
 		<select name="client_id" id="client_id" class="scan-input">
-		    <option value="">Walk-in Customer</option>
+			<option value="" disabled selected>Select client...</option>
 		    {% for c in clients %}
 		        <option value="{{ c.id }}">{{ c.name }}</option>
 		    {% endfor %}
@@ -248,22 +284,23 @@
 
         <label>Payment method:</label>
         <select name="payment_method" class="scan-input">
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="eft">EFT</option>
+			<option value="" disabled selected>Select payment method...</option>
+			<option value="cash">Cash</option>
+			<option value="card">Card</option>
+			<option value="eft">EFT</option>
         </select>
 
         <label>Cash received:</label>
-        <input type="text" name="cash_received" id="cashReceived" class="small-input" value="0">
+		<input type="text" name="cash_received" id="cashReceived" class="small-input" placeholder="Enter cash received">
 
         <label>Change due:</label>
         <input type="text" name="change_due" id="changeDue" class="small-input" value="0" readonly>
 
         <label style="margin-top:8px;">Digit pad target:</label>
         <select id="digitTarget" class="small-input">
-            <option value="qty">Selected line qty</option>
-            <option value="cash">Cash received</option>
-            <option value="discount">Discount (amount)</option>
+			<option value="qty">Selected line qty</option>
+			<option value="cash" selected>Cash received</option>
+			<option value="discount">Discount (amount)</option>
         </select>
 
         <div class="digit-pad">
@@ -285,10 +322,185 @@
     </div>
 
 </div>
+<!-- CONFIRMATION MODAL -->
+<div id="confirmModal" style="
+    display:none;
+    position:fixed; top:0; left:0;
+    width:100%; height:100%;
+    background:rgba(0,0,0,0.6);
+    backdrop-filter:blur(3px);
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+">
+
+    <div id="confirmBox" style="
+        background:#fff; padding:20px; width:320px; border-radius:10px;
+        text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.3);
+    ">
+        <h3 style="margin-top:0;">Confirm Sale</h3>
+        <p>Are you sure you want to complete this sale?</p>
+
+        <button id="confirmYes" class="btn-gold" style="width:100%; margin-top:10px;">
+            Yes, Complete Sale
+        </button>
+
+        <button id="confirmNo" type="button" class="btn-black" style="width:100%; margin-top:10px;">
+            Cancel
+        </button>
+    </div>
+</div>
+
+
+<!-- RECEIPT POPUP -->
+<div id="receiptPopup" style="
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,0.6); backdrop-filter:blur(3px);
+    justify-content:center; align-items:center; z-index:9999;">
+    
+    <div style="
+        background:#fff; padding:20px; width:350px; border-radius:10px;
+        text-align:center; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+        
+        <h3 style="margin-top:0;">Sale Completed</h3>
+        <p>Your sale has been processed successfully.</p>
+
+        <button id="printReceipt" class="btn-gold" style="width:100%; margin-top:10px;">
+            Print Receipt
+        </button>
+
+        <button id="closeReceipt" class="btn-black" style="width:100%; margin-top:10px;">
+            Close
+        </button>
+    </div>
+</div>
+
 
 </form>
 
 <script>
+	
+	function buildThermalReceipt(invoiceNo, items, subtotal, vat, total, method, cash, change) {
+
+	    document.getElementById("r_invoice").innerText = invoiceNo;
+	    document.getElementById("r_date").innerText = new Date().toLocaleString();
+
+	    document.getElementById("r_subtotal").innerText = "R " + subtotal.toFixed(2);
+	    document.getElementById("r_vat").innerText = "R " + vat.toFixed(2);
+	    document.getElementById("r_total").innerText = "R " + total.toFixed(2);
+
+	    document.getElementById("r_method").innerText = method;
+	    document.getElementById("r_cash").innerText = "R " + cash.toFixed(2);
+	    document.getElementById("r_change").innerText = "R " + change.toFixed(2);
+
+	    // Build item list
+	    let html = "";
+	    items.forEach(i => {
+	        html += `${i.name} x${i.qty}  R${i.total}<br>`;
+	    });
+	    document.getElementById("r_items").innerHTML = html;
+
+	    // Generate barcode
+	    JsBarcode("#barcode", invoiceNo, {
+	        format: "CODE128",
+	        width: 2,
+	        height: 50,
+	        displayValue: false
+	    });
+	}
+
+	// Intercept form submit
+	document.getElementById("pos-form").addEventListener("submit", function(e) {
+	    e.preventDefault(); // stop immediate submission
+
+	    // Show confirmation modal instead
+	    const modal = document.getElementById("confirmModal");
+	    modal.style.display = "flex";
+	});
+;
+
+	// Close modal function (shared by cancel + backdrop)
+	function closeConfirmModal() {
+	    const modal = document.getElementById("confirmModal");
+	    modal.style.display = "none";
+	}
+
+	// Cancel button uses the same close function
+	document.getElementById("confirmNo").addEventListener("click", closeConfirmModal);
+
+	// Clicking outside modal box also closes it
+	window.addEventListener("click", function(e) {
+	    const modal = document.getElementById("confirmModal");
+	    if (e.target === modal) {
+	        closeConfirmModal();
+	    }
+	});
+
+
+
+	// Confirm sale
+	document.getElementById("confirmYes").addEventListener("click", function() {
+	    // Hide modal
+	    document.getElementById("confirmModal").style.display = "none";
+
+	    // Submit the form manually
+	    document.getElementById("pos-form").submit();
+	});
+
+
+	    // Show receipt popup
+		document.getElementById("confirmYes").addEventListener("click", function() {
+
+		    // Hide modal
+		    document.getElementById("confirmModal").style.display = "none";
+
+		    // Show receipt popup
+		    document.getElementById("receiptPopup").style.display = "flex";
+
+		    // Auto-print after 1 second
+		    setTimeout(() => {
+
+		        // Build receipt from cart
+		        let items = [];
+		        document.querySelectorAll("#cartTable tbody tr").forEach(row => {
+		            items.push({
+		                name: row.children[0].innerText,
+		                qty: parseInt(row.children[1].innerText),
+		                total: row.children[3].innerText
+		            });
+		        });
+
+		        // Build thermal receipt
+		        buildThermalReceipt(
+		            "INV" + Date.now(),
+		            items,
+		            parseFloat(document.getElementById("subtotalDisplay").innerText),
+		            parseFloat(document.getElementById("vatDisplay").innerText),
+		            parseFloat(document.getElementById("grandTotalDisplay").innerText),
+		            document.querySelector("[name='payment_method']").value,
+		            parseFloat(document.getElementById("cashReceived").value),
+		            parseFloat(document.getElementById("changeDue").value)
+		        );
+
+		        // Print
+		        setTimeout(() => window.print(), 500);
+
+		    }, 1000);
+		});
+
+			// Build receipt from cart
+			let items = [];
+			document.querySelectorAll("#cartTable tbody tr").forEach(row => {
+			    items.push({
+			        name: row.children[0].innerText,
+			        qty: parseInt(row.children[1].innerText),
+			        total: row.children[3].innerText
+			    });
+			});
+
+
+
+
 document.addEventListener("DOMContentLoaded", function() {
 
     const barcodeInput = document.getElementById("barcode-input");
@@ -533,6 +745,65 @@ document.addEventListener("DOMContentLoaded", function() {
     discountInput.addEventListener("input", recalcTotals);
 
 });
+// Cancel confirmation modal
+document.getElementById("confirmNo").addEventListener("click", function() {
+    const modal = document.getElementById("confirmModal");
+    modal.style.display = "none";
+});
+
+
+
+
+
+
 </script>
 
+<!-- THERMAL RECEIPT (PRINT-ONLY) -->
+<div id="thermalReceipt" style="display:none;">
+
+    <div style="width:58mm; font-family:monospace; font-size:13px;">
+
+        <div style="text-align:center;">
+			<strong>RELLA STORES</strong><br>
+			
+
+            --------------------------------
+        </div>
+
+        <div>
+            Receipt: <strong id="r_invoice"></strong><br>
+            Date: <span id="r_date"></span><br>
+            --------------------------------
+        </div>
+
+        <div id="r_items"></div>
+
+        <div>
+            --------------------------------<br>
+            Subtotal: <span id="r_subtotal"></span><br>
+            VAT (15%): <span id="r_vat"></span><br>
+            Total: <strong id="r_total"></strong><br>
+            --------------------------------
+        </div>
+
+        <div>
+            Payment: <span id="r_method"></span><br>
+            Cash: <span id="r_cash"></span><br>
+            Change: <span id="r_change"></span><br>
+            --------------------------------
+        </div>
+
+        <div style="text-align:center; margin-top:10px;">
+            <svg id="barcode"></svg>
+        </div>
+
+        <div style="text-align:center; margin-top:10px;">
+            Thank you for shopping!
+        </div>
+
+    </div>
+
+</div>
+
 {% endblock %}
+
