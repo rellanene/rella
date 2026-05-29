@@ -1360,6 +1360,9 @@ def finances_page():
 
 
 from datetime import datetime
+import time
+import random
+from mysql.connector.errors import IntegrityError
 
 @app.route('/pos_submit', methods=['POST'])
 @require_login
@@ -1381,42 +1384,58 @@ def pos_submit():
     cash_received = float(request.form.get('cash_received') or 0)
     change_due = float(request.form.get('change_due') or 0)
 
-    # 0️⃣ Generate invoice number (timestamp)
-    invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S")
-
     # 1️⃣ Calculate subtotal + VAT
     subtotal = round(grand_total / 1.15, 2)
     vat = round(grand_total - subtotal, 2)
 
-    # 2️⃣ Insert sale header
-    cursor.execute("""
-        INSERT INTO sales
-        (invoice_no, client_id, subtotal, vat, total, created_by, store_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (
-        invoice_no,
-        client_id,
-        subtotal,
-        vat,
-        grand_total,
-        user['id'],
-        store_id
-    ))
+    # 2️⃣ Generate invoice number with retry protection
+    max_attempts = 5
+    attempt = 0
 
-    sale_id = cursor.lastrowid   # ⭐ THIS IS THE REAL INVOICE ID
+    while attempt < max_attempts:
+        try:
+            # Add randomness to avoid collisions
+            invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(100, 999))
+
+            cursor.execute("""
+                INSERT INTO sales
+                (invoice_no, client_id, subtotal, vat, total, created_by, store_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                invoice_no,
+                client_id,
+                subtotal,
+                vat,
+                grand_total,
+                user['id'],
+                store_id
+            ))
+
+            sale_id = cursor.lastrowid
+            break  # SUCCESS → exit retry loop
+
+        except IntegrityError as e:
+            if "Duplicate entry" in str(e):
+                attempt += 1
+                time.sleep(0.1)  # small delay to avoid collision
+                continue
+            else:
+                raise  # real error → rethrow
+
+    if attempt == max_attempts:
+        flash("System busy. Please try again.", "danger")
+        return redirect(url_for('pos_page'))
 
     # 3️⃣ Insert sale items + stock + movements
     for product_id, qty, price, line_total in zip(cart_product_ids, cart_quantities, cart_prices, cart_totals):
         qty = int(qty)
 
-        # 3.1 Sale item
         cursor.execute("""
             INSERT INTO sale_items
             (sale_id, product_id, quantity, unit_price, total_price)
             VALUES (%s, %s, %s, %s, %s)
         """, (sale_id, product_id, qty, price, line_total))
 
-        # 3.2 Update stock
         cursor.execute("""
             SELECT id, quantity FROM store_stock
             WHERE product_id=%s AND store_id=%s
@@ -1435,7 +1454,6 @@ def pos_submit():
                 VALUES (%s, %s, %s, %s)
             """, (store_id, product_id, -qty, user['id']))
 
-        # 3.3 Movement log (⭐ now includes invoice_id)
         cursor.execute("""
             INSERT INTO movements
             (product_id, movement_type, qty, from_store, created_by, invoice_id)
@@ -1447,6 +1465,7 @@ def pos_submit():
 
     flash("Sale completed successfully!", "success")
     return redirect(url_for('pos_page'))
+
 
 
 
