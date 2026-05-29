@@ -3088,6 +3088,11 @@ def admin_vacancy_applications():
 
 
 # --- Tasks ---
+from datetime import datetime
+import time
+import random
+from mysql.connector.errors import IntegrityError
+
 @app.route('/tasks', methods=['GET','POST'])
 @require_login
 def tasks():
@@ -3103,20 +3108,40 @@ def tasks():
         priority = request.form.get('priority', 'medium')
         status = 'open'
 
-        # NEW: Task number = timestamp (no spaces, no special characters)
-        from datetime import datetime
-        task_no = datetime.now().strftime("%Y%m%d%H%M%S")   # Example: 20260513161522
+        # ----------------------------------------------------
+        # SAFE TASK NUMBER GENERATION (NO DUPLICATES)
+        # ----------------------------------------------------
+        max_attempts = 5
+        attempt = 0
 
-        execute("""
-            INSERT INTO tasks (task_no, title, description, assigned_to, priority, status)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (task_no, title, desc, assigned_to, priority, status))
+        while attempt < max_attempts:
+            try:
+                # Timestamp + randomness to avoid collisions
+                task_no = datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(100, 999))
 
-        log_action(user['id'], 'create_task', f'Created task {task_no}')
-        flash('Task created', 'success')
+                execute("""
+                    INSERT INTO tasks (task_no, title, description, assigned_to, priority, status)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (task_no, title, desc, assigned_to, priority, status))
+
+                log_action(user['id'], 'create_task', f'Created task {task_no}')
+                flash('Task created', 'success')
+                return redirect(url_for('tasks'))
+
+            except IntegrityError as e:
+                if "Duplicate entry" in str(e):
+                    attempt += 1
+                    time.sleep(0.1)
+                    continue
+                else:
+                    raise
+
+        flash("System busy. Please try again.", "danger")
         return redirect(url_for('tasks'))
 
+    # ----------------------------------------------------
     # SEARCH MODE
+    # ----------------------------------------------------
     q = request.args.get('q','')
     if q:
         rows = query_all("""
@@ -3136,6 +3161,7 @@ def tasks():
         """)
 
     return render_template("tasks.html", users=users, tasks=rows)
+
 
 
 @app.route('/tasks/<int:task_id>')
