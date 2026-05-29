@@ -1476,8 +1476,9 @@ def pos_submit():
 
 
 from datetime import datetime
-
-from datetime import datetime
+import time
+import random
+from mysql.connector.errors import IntegrityError
 
 @app.route('/record_sale', methods=['POST'])
 @require_login
@@ -1496,17 +1497,38 @@ def record_sale():
     vat = request.form.get("vat")
     total = request.form.get("total")
 
-    # Insert sale header
-    sale_id = execute("""
-        INSERT INTO sales (client_id, store_id, subtotal, vat, total, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """, (client_id, store_id, subtotal, vat, total, user["id"]))
+    # ----------------------------------------------------
+    # 1️⃣ Insert sale header with retry-safe invoice number
+    # ----------------------------------------------------
+    max_attempts = 5
+    attempt = 0
 
-    # Timestamp invoice number
-    invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S")
-    execute("UPDATE sales SET invoice_no=%s WHERE id=%s", (invoice_no, sale_id))
+    while attempt < max_attempts:
+        try:
+            # Add randomness to avoid collisions
+            invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(100, 999))
 
-    # Insert sale items
+            sale_id = execute("""
+                INSERT INTO sales (invoice_no, client_id, store_id, subtotal, vat, total, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (invoice_no, client_id, store_id, subtotal, vat, total, user["id"]))
+
+            break  # SUCCESS → exit retry loop
+
+        except IntegrityError as e:
+            if "Duplicate entry" in str(e):
+                attempt += 1
+                time.sleep(0.1)  # small delay to avoid collision
+                continue
+            else:
+                raise  # real error → rethrow
+
+    if attempt == max_attempts:
+        return jsonify(success=False, error="System busy. Please try again.")
+
+    # ----------------------------------------------------
+    # 2️⃣ Insert sale items
+    # ----------------------------------------------------
     cols = query_all("SHOW COLUMNS FROM sale_items")
     colnames = [c['Field'] for c in cols]
 
@@ -1524,7 +1546,9 @@ def record_sale():
     for pid, qty, price, line_total in zip(product_ids, qtys, prices, totals):
         execute(insert_sql, (sale_id, pid, qty, price, line_total))
 
-    # ⭐ INSERT MOVEMENT RECORDS (this was missing)
+    # ----------------------------------------------------
+    # 3️⃣ Insert movement logs
+    # ----------------------------------------------------
     for pid, qty in zip(product_ids, qtys):
         execute("""
             INSERT INTO movements (product_id, qty, movement_type, from_store, to_store, invoice_id, created_by)
