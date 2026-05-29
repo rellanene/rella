@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Client Portfolio{% endblock %}
+{% block content %}
+
+<style>
+    .section-card {
+        background: white;
+        padding: 18px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #d4af37;
+    }
+    .section-title {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #d4af37;
+    }
+    .btn-gold {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-gold:hover { background-color: #b8952f; }
+
+    .btn-black {
+        background-color: black;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-black:hover { background-color: #222; }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    .data-table th, .data-table td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+    }
+    .data-table tbody tr:hover {
+        background-color: #fdf6e3 !important;
+    }
+</style>
+
+<h1>Client Portfolio: {{ client.name }}</h1>
+<!-- Edit Client Button -->
+<form action="{{ url_for('edit_client', client_id=client.id) }}" method="get" style="display:inline-block; margin-bottom: 15px;">
+    <button type="submit" class="btn-gold">
+         Edit Client
+    </button>
+</form>
+
+
+<!-- ========================= -->
+<!-- 1. CLIENT IDENTITY -->
+<!-- ========================= -->
+<div class="section-card">
+    <div class="section-title">Client Identity</div>
+    <p><strong>Name:</strong> {{ client.name }}</p>
+    <p><strong>Email:</strong> {{ client.email }}</p>
+    <p><strong>Phone:</strong> {{ client.phone }}</p>
+    <p><strong>Client Type:</strong> {{ client.client_type or "Individual" }}</p>
+    <p><strong>VAT Number:</strong> {{ client.vat_no or "N/A" }}</p>
+    <p><strong>Created At:</strong> {{ client.created_at }}</p>
+</div>
+
+<!-- ========================= -->
+<!-- 2. DOCUMENTS -->
+<!-- ========================= -->
+<div class="section-card">
+    <div class="section-title">Documents</div>
+
+    <form method="post" action="{{ url_for('client_upload', client_id=client.id) }}" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button class="btn-gold">Upload</button>
+    </form>
+
+    <table class="data-table">
+    <thead>
+        <tr>
+            <th>File</th>
+            <th>Uploaded By</th>
+            <th>Date</th>
+            <th>Download</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for d in documents %}
+        <tr>
+            <td>{{ d.filename }}</td>
+            <td>{{ d.uploaded_by_name }}</td>
+            <td>{{ d.uploaded_at }}</td>
+            <td>
+                <a class="btn-black" href="/uploads/clients/{{ d.filename }}" download>
+                    Download
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+    
+</div>
+
+
+
+<!-- ========================= -->
+<!-- 4. COMMUNICATION LOG -->
+<!-- ========================= -->
+<div class="section-card">
+    <div class="section-title">Communication Log</div>
+
+    <form method="post" action="{{ url_for('add_client_comm', client_id=client.id) }}">
+        <textarea name="note" placeholder="Add communication note..." required></textarea>
+        <br>
+        <button class="btn-gold">Add Note</button>
+    </form>
+
+    <table class="data-table">
+	    <thead>
+	        <tr>
+	            <th>Note</th>
+	            <th>Staff</th>
+	            <th>Date</th>
+	        </tr>
+	    </thead>
+	    <tbody>
+	        {% for c in comms %}
+	        <tr>
+	            <td>{{ c.note }}</td>
+	            <td>{{ c.staff_name }}</td>
+	            <td>{{ c.created_at }}</td>
+	        </tr>
+	        {% endfor %}
+	    </tbody>
+	</table>
+    
+</div>
+
+
+
+<div class="section-card">
+    <div class="section-title">Financial Overview</div>
+
+    <p><strong>Total Invoiced:</strong> R {{ invoice_total }}</p>
+    <p><strong>Total Paid:</strong> R {{ payment_total }}</p>
+
+    <p style="font-size:20px; font-weight:bold;">
+        Outstanding Balance:
+        <span style="color:red;">R {{ outstanding }}</span>
+    </p>
+    
+	<br>
+    <a class="btn-black" href="{{ url_for('client_statement', client_id=client.id) }}">
+        View Statement
+    </a>
+</div>
+
+
+<!-- ========================= -->
+<!-- 5. TASKS -->
+<!-- ========================= -->
+
+
+<!-- ========================= -->
+<!-- 6. TIMELINE -->
+<!-- ========================= -->
+<div class="section-card">
+    <div class="section-title">Activity Timeline</div>
+
+    <table class="data-table">
+	    <thead>
+	        <tr>
+	            <th>Note</th>
+	            <th>Staff</th>
+	            <th>Date</th>
+	        </tr>
+	    </thead>
+	    <tbody>
+	        {% for c in comms %}
+	        <tr>
+	            <td>{{ c.note }}</td>
+	            <td>{{ c.staff_name }}</td>
+	            <td>{{ c.created_at }}</td>
+	        </tr>
+	        {% endfor %}
+	    </tbody>
+	</table>
+    
+</div>
+
+<!-- ========================= -->
+<!-- 3. SALES HISTORY -->
+<!-- ========================= -->
+<div class="section-card">
+    <div class="section-title">Sales & Transactions</div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Invoice</th>
+                <th>Total</th>
+                <th>VAT</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sales %}
+            <tr>
+                <td>{{ s.invoice_no }}</td>
+                <td>R {{ s.total }}</td>
+                <td>R {{ s.vat }}</td>
+                <td>{{ s.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

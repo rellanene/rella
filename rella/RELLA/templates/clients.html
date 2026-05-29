@@ -3,12 +3,10 @@
 {% block content %}
 
 <style>
-	/* Force hover to override zebra striping */
-	.data-table tbody tr:hover,
-	.data-table tbody tr:hover td {
-	    background-color: #fdf6e3 !important;  /* premium soft cream */
-	}
-    /* Gold/Black Theme Buttons */
+    .data-table tbody tr:hover,
+    .data-table tbody tr:hover td {
+        background-color: #fdf6e3 !important;
+    }
     .btn-gold {
         background-color: #d4af37;
         color: black;
@@ -18,9 +16,7 @@
         cursor: pointer;
         font-weight: bold;
     }
-    .btn-gold:hover {
-        background-color: #b8952f;
-    }
+    .btn-gold:hover { background-color: #b8952f; }
 
     .btn-black {
         background-color: black;
@@ -31,20 +27,16 @@
         cursor: pointer;
         font-weight: bold;
     }
-    .btn-black:hover {
-        background-color: #222;
-    }
+    .btn-black:hover { background-color: #222; }
 </style>
 
 <h1>Clients</h1>
 
-<!-- Search Form -->
 <form method="get" class="search-form">
   <input name="q" placeholder="Search client by name, email or phone" value="{{ request.args.get('q','') }}">
   <button type="submit" class="btn-black">Search</button>
 </form>
 
-<!-- Add Client Form -->
 <form method="post" class="add-form">
   <h3>Add Client</h3>
   <input name="name" placeholder="Name" required>
@@ -53,7 +45,6 @@
   <button type="submit" class="btn-gold">Add</button>
 </form>
 
-<!-- Clients Table -->
 <table class="data-table">
   <thead>
     <tr>
@@ -62,6 +53,7 @@
       <th>Phone</th>
       <th>Created At</th>
       <th>Added By</th>
+      <th>Portfolio</th>
     </tr>
   </thead>
   <tbody>
@@ -72,6 +64,11 @@
       <td>{{ c.phone }}</td>
       <td>{{ c.created_at }}</td>
       <td>{{ c.created_by }}</td>
+      <td>
+        <a class="btn-gold" href="{{ url_for('client_portfolio', client_id=c.id) }}">
+          View
+        </a>
+      </td>
     </tr>
     {% endfor %}
   </tbody>

@@ -945,6 +945,257 @@ def clients():
         rows = query_all("SELECT * FROM clients")
     return render_template('clients.html', clients=rows, user=user)
 
+@app.route('/client/<int:client_id>')
+@require_login
+def client_portfolio(client_id):
+    user = current_user()
+
+    # 1️⃣ Load client
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for('clients'))
+
+    # 2️⃣ Documents
+    documents = query_all("""
+        SELECT d.*, u.username AS uploaded_by_name
+        FROM client_documents d
+        LEFT JOIN users u ON d.uploaded_by = u.id
+        WHERE d.client_id=%s
+        ORDER BY d.uploaded_at DESC
+    """, (client_id,))
+
+    # 3️⃣ Sales History
+    sales = query_all("""
+        SELECT invoice_no, total, vat, created_at
+        FROM sales
+        WHERE client_id=%s
+        ORDER BY id DESC
+    """, (client_id,))
+
+    # 4️⃣ Communication Log
+    comms = query_all("""
+        SELECT c.*, u.username AS staff_name
+        FROM client_comms c
+        LEFT JOIN users u ON c.created_by = u.id
+        WHERE c.client_id=%s
+        ORDER BY c.created_at DESC
+    """, (client_id,))
+
+    # 5️⃣ Tasks assigned to this client
+    tasks = query_all("""
+        SELECT *
+        FROM tasks
+        WHERE assigned_to=%s
+        ORDER BY id DESC
+    """, (client_id,))
+
+    # 6️⃣ Timeline (full audit trail)
+    timeline = query_all("""
+        SELECT t.*, u.username AS staff_name
+        FROM client_timeline t
+        LEFT JOIN users u ON t.created_by = u.id
+        WHERE t.client_id=%s
+        ORDER BY t.created_at DESC
+    """, (client_id,))
+
+    # 7️⃣ Financial Overview
+    invoice_total = query_one("""
+        SELECT COALESCE(SUM(total),0) AS total
+        FROM sales
+        WHERE client_id=%s
+    """, (client_id,))['total']
+
+    payment_total = query_one("""
+        SELECT COALESCE(SUM(amount),0) AS total
+        FROM payments
+        WHERE client_id=%s
+    """, (client_id,))['total']
+
+    outstanding = invoice_total - payment_total
+
+    # 8️⃣ Render Portfolio Page
+    return render_template(
+        "client_portfolio.html",
+        client=client,
+        documents=documents,
+        sales=sales,
+        comms=comms,
+        tasks=tasks,
+        timeline=timeline,
+        invoice_total=invoice_total,
+        payment_total=payment_total,
+        outstanding=outstanding
+    )
+
+
+
+@app.route('/client/<int:client_id>/upload', methods=['POST'])
+@require_login
+def client_upload(client_id):
+    user = current_user()
+    file = request.files.get('file')
+
+    if not file:
+        flash("No file selected", "danger")
+        return redirect(url_for('client_portfolio', client_id=client_id))
+
+    # Ensure upload directory exists
+    upload_dir = os.path.join(app.root_path, "uploads", "clients")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Secure filename and save
+    filename = secure_filename(file.filename)
+    stored_name = f"{int(time.time())}_{filename}"
+    path = os.path.join(upload_dir, stored_name)
+    file.save(path)
+
+    # Insert document record
+    execute("""
+        INSERT INTO client_documents (client_id, filename, uploaded_by)
+        VALUES (%s, %s, %s)
+    """, (client_id, stored_name, user['id']))
+
+    # Log timeline event
+    execute("""
+        INSERT INTO client_timeline (client_id, event_type, description, created_by)
+        VALUES (%s, 'document', %s, %s)
+    """, (client_id, f"Uploaded document {filename}", user['id']))
+
+    flash("Document uploaded successfully.", "success")
+    return redirect(url_for('client_portfolio', client_id=client_id))
+
+
+
+@app.route('/client/<int:client_id>/add_comm', methods=['POST'])
+@require_login
+def add_client_comm(client_id):
+    user = current_user()
+    note = request.form.get("note")
+
+    execute("""
+        INSERT INTO client_comms (client_id, note, created_by)
+        VALUES (%s, %s, %s)
+    """, (client_id, note, user['id']))
+
+    execute("""
+        INSERT INTO client_timeline (client_id, event_type, description, created_by)
+        VALUES (%s, 'communication', %s, %s)
+    """, (client_id, f"Added communication note", user['id']))
+
+    flash("Communication logged", "success")
+    return redirect(url_for('client_portfolio', client_id=client_id))
+
+
+@app.route('/client/<int:client_id>/add_note', methods=['POST'])
+@require_login
+def add_client_note(client_id):
+    user = current_user()
+    note = request.form.get("note")
+
+    execute("""
+        UPDATE clients SET notes=%s WHERE id=%s
+    """, (note, client_id))
+
+    execute("""
+        INSERT INTO client_timeline (client_id, event_type, description, created_by)
+        VALUES (%s, 'note', %s, %s)
+    """, (client_id, "Updated client notes", user['id']))
+
+    flash("Client notes updated", "success")
+    return redirect(url_for('client_portfolio', client_id=client_id))
+
+
+@app.route('/client/<int:client_id>/edit', methods=['GET','POST'])
+@require_login
+def edit_client(client_id):
+    user = current_user()
+
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for('clients'))
+
+    if request.method == 'POST':
+        name = request.form.get("name")
+        email = request.form.get("email")
+        phone = request.form.get("phone")
+        client_type = request.form.get("client_type")
+        vat_no = request.form.get("vat_no")
+        address = request.form.get("address")
+        notes = request.form.get("notes")
+        status = request.form.get("status")
+
+        execute("""
+            UPDATE clients
+            SET name=%s, email=%s, phone=%s, client_type=%s, vat_no=%s,
+                address=%s, notes=%s, status=%s
+            WHERE id=%s
+        """, (name, email, phone, client_type, vat_no, address, notes, status, client_id))
+
+        execute("""
+            INSERT INTO client_timeline (client_id, event_type, description, created_by)
+            VALUES (%s, 'edit', %s, %s)
+        """, (client_id, "Client profile updated", user['id']))
+
+        flash("Client updated successfully", "success")
+        return redirect(url_for('client_portfolio', client_id=client_id))
+
+    return render_template("client_edit.html", client=client)
+
+
+@app.route('/client/<int:client_id>/statement')
+@require_login
+def client_statement(client_id):
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for('clients'))
+
+    invoices = query_all("""
+        SELECT id, invoice_no, total, created_at
+        FROM sales WHERE client_id=%s ORDER BY created_at ASC
+    """, (client_id,))
+
+    payments = query_all("""
+        SELECT id, amount, payment_method, created_at
+        FROM payments WHERE client_id=%s ORDER BY created_at ASC
+    """, (client_id,))
+
+    # Merge into timeline
+    timeline = []
+
+    for i in invoices:
+        timeline.append({
+            "type": "invoice",
+            "date": i['created_at'],
+            "amount": i['total'],
+            "ref": i['invoice_no']
+        })
+
+    for p in payments:
+        timeline.append({
+            "type": "payment",
+            "date": p['created_at'],
+            "amount": p['amount'],
+            "ref": p['payment_method']
+        })
+
+    # Sort by date
+    timeline = sorted(timeline, key=lambda x: x['date'])
+
+    # Running balance
+    balance = 0
+    for t in timeline:
+        if t['type'] == 'invoice':
+            balance += t['amount']
+        else:
+            balance -= t['amount']
+        t['balance'] = balance
+
+    return render_template("client_statement.html", client=client, timeline=timeline)
+
+
 # --- Sales (simple flow) ---
 @app.route('/sales', methods=['GET'])
 @require_login
@@ -1391,10 +1642,10 @@ def pos_submit():
     # 2️⃣ Generate invoice number with retry protection
     max_attempts = 5
     attempt = 0
+    sale_id = None
 
     while attempt < max_attempts:
         try:
-            # Add randomness to avoid collisions
             invoice_no = "INV" + datetime.now().strftime("%Y%m%d%H%M%S") + str(random.randint(100, 999))
 
             cursor.execute("""
@@ -1412,18 +1663,19 @@ def pos_submit():
             ))
 
             sale_id = cursor.lastrowid
-            break  # SUCCESS → exit retry loop
+            break  # success
 
         except IntegrityError as e:
             if "Duplicate entry" in str(e):
                 attempt += 1
-                time.sleep(0.1)  # small delay to avoid collision
+                time.sleep(0.1)
                 continue
             else:
-                raise  # real error → rethrow
+                raise
 
     if attempt == max_attempts:
         flash("System busy. Please try again.", "danger")
+        cursor.close()
         return redirect(url_for('pos_page'))
 
     # 3️⃣ Insert sale items + stock + movements
@@ -1460,11 +1712,25 @@ def pos_submit():
             VALUES (%s, 'sale', %s, %s, %s, %s)
         """, (product_id, qty, store_id, user['id'], sale_id))
 
+    # 4️⃣ Record payment (NEW)
+    if client_id and payment_method:
+        cursor.execute("""
+            INSERT INTO payments (client_id, amount, payment_method, reference, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            client_id,
+            cash_received or grand_total,  # handle partial or full payment
+            payment_method,
+            invoice_no,
+            user['id']
+        ))
+
     db.commit()
     cursor.close()
 
     flash("Sale completed successfully!", "success")
     return redirect(url_for('pos_page'))
+
 
 
 

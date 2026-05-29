@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Edit Client{% endblock %}
+{% block content %}
+
+<style>
+    .edit-wrapper {
+        max-width: 700px;
+        margin: auto;
+    }
+
+    .section-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #d4af37;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .section-card label {
+        font-weight: bold;
+        margin-top: 12px;
+        display: block;
+        color: #333;
+    }
+
+    .section-card input,
+    .section-card select,
+    .section-card textarea {
+        width: 100%;
+        padding: 10px;
+        margin-top: 4px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 15px;
+    }
+
+    .section-card textarea {
+        height: 100px;
+        resize: vertical;
+    }
+
+    .btn-gold {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 20px;
+    }
+    .btn-gold:hover {
+        background-color: #b8952f;
+    }
+
+    .btn-black {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        border: 2px solid #000000;
+        padding: 10px 18px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+    .btn-black:hover {
+        background-color: #111111 !important;
+        border-color: #111111;
+    }
+
+    .top-actions {
+        margin-bottom: 20px;
+    }
+</style>
+
+<div class="edit-wrapper">
+
+    <h1>Edit Client</h1>
+
+    <!-- Back Button -->
+    <div class="top-actions">
+        <form action="{{ url_for('client_portfolio', client_id=client.id) }}" method="get" style="display:inline-block;">
+            <button type="submit" class="btn-black"> Back to Portfolio</button>
+        </form>
+    </div>
+
+    <form method="post" class="section-card">
+
+        <label>Name</label>
+        <input name="name" value="{{ client.name }}" required>
+
+        <label>Email</label>
+        <input name="email" value="{{ client.email }}">
+
+        <label>Phone</label>
+        <input name="phone" value="{{ client.phone }}">
+
+        <label>Client Type</label>
+        <select name="client_type">
+            <option value="Individual" {% if client.client_type=='Individual' %}selected{% endif %}>Individual</option>
+            <option value="Business" {% if client.client_type=='Business' %}selected{% endif %}>Business</option>
+        </select>
+
+        <label>VAT Number</label>
+        <input name="vat_no" value="{{ client.vat_no }}">
+
+        <label>Address</label>
+        <textarea name="address">{{ client.address }}</textarea>
+
+        <label>Notes</label>
+        <textarea name="notes">{{ client.notes }}</textarea>
+
+        <label>Status</label>
+        <select name="status">
+            <option value="active" {% if client.status=='active' %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if client.status=='inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+
+        <button class="btn-gold">Save Changes</button>
+    </form>
+
+</div>
+
+{% endblock %}

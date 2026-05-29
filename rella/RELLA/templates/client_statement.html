@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Client Statement{% endblock %}
+{% block content %}
+
+<style>
+.btn-black {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    border: 2px solid #000000;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.btn-black:hover {
+    background-color: #111111 !important;
+    border-color: #111111;
+}
+</style>
+
+<h1>Statement for {{ client.name }}</h1>
+
+<form action="{{ url_for('client_portfolio', client_id=client.id) }}" method="get" style="margin-bottom: 15px;">
+    <button type="submit" class="btn-black">
+        Back to Client Portfolio
+    </button>
+</form>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Reference</th>
+            <th>Amount</th>
+            <th>Running Balance</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in timeline|reverse %}
+        <tr>
+            <td>{{ t.date }}</td>
+            <td>{{ t.type|capitalize }}</td>
+            <td>{{ t.ref }}</td>
+            <td>
+                {% if t.type == 'invoice' %}
+                    <span style="color:red;">R {{ t.amount }}</span>
+                {% else %}
+                    <span style="color:green;">R -{{ t.amount }}</span>
+                {% endif %}
+            </td>
+            <td><strong>R {{ t.balance }}</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}
