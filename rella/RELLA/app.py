@@ -1144,25 +1144,50 @@ def edit_client(client_id):
     return render_template("client_edit.html", client=client)
 
 
-@app.route('/client/<int:client_id>/statement')
-@require_login
-def client_statement(client_id):
+def get_client_statement_data(client_id, start_date=None, end_date=None):
     client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
     if not client:
-        flash("Client not found", "danger")
-        return redirect(url_for('clients'))
+        return None, None
 
-    invoices = query_all("""
+    # Build invoice query
+    invoice_sql = """
         SELECT id, invoice_no, total, created_at
-        FROM sales WHERE client_id=%s ORDER BY created_at ASC
-    """, (client_id,))
+        FROM sales
+        WHERE client_id=%s
+    """
+    params = [client_id]
 
-    payments = query_all("""
+    if start_date:
+        invoice_sql += " AND DATE(created_at) >= %s"
+        params.append(start_date)
+
+    if end_date:
+        invoice_sql += " AND DATE(created_at) <= %s"
+        params.append(end_date)
+
+    invoice_sql += " ORDER BY created_at ASC"
+    invoices = query_all(invoice_sql, tuple(params))
+
+    # Build payment query
+    payment_sql = """
         SELECT id, amount, payment_method, created_at
-        FROM payments WHERE client_id=%s ORDER BY created_at ASC
-    """, (client_id,))
+        FROM payments
+        WHERE client_id=%s
+    """
+    params2 = [client_id]
 
-    # Merge into timeline
+    if start_date:
+        payment_sql += " AND DATE(created_at) >= %s"
+        params2.append(start_date)
+
+    if end_date:
+        payment_sql += " AND DATE(created_at) <= %s"
+        params2.append(end_date)
+
+    payment_sql += " ORDER BY created_at ASC"
+    payments = query_all(payment_sql, tuple(params2))
+
+    # Merge timeline
     timeline = []
 
     for i in invoices:
@@ -1193,7 +1218,163 @@ def client_statement(client_id):
             balance -= t['amount']
         t['balance'] = balance
 
-    return render_template("client_statement.html", client=client, timeline=timeline)
+    return client, timeline
+
+from datetime import datetime
+
+@app.route('/client/<int:client_id>/statement/export_csv')
+@require_login
+def export_client_statement_csv(client_id):
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    client, timeline = get_client_statement_data(client_id, start_date, end_date)
+
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for('clients'))
+
+    # Build CSV
+    csv_data = "Date,Type,Reference,Amount,Running Balance\n"
+    for t in timeline:
+        csv_data += f"{t['date']},{t['type']},{t['ref']},{t['amount']},{t['balance']}\n"
+
+    # Timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Final filename
+    filename = f"client_statement_{client_id}_{timestamp}.csv"
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.route('/client/<int:client_id>/statement/print')
+@require_login
+def print_client_statement(client_id):
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    client, timeline = get_client_statement_data(client_id, start_date, end_date)
+
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for('clients'))
+
+    return render_template(
+        "client_statement_print.html",
+        client=client,
+        timeline=timeline,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+
+
+def get_client_statement_data(client_id, start_date=None, end_date=None):
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        return None, None
+
+    # Build invoice query
+    invoice_sql = """
+        SELECT id, invoice_no, total, created_at
+        FROM sales
+        WHERE client_id=%s
+    """
+    params = [client_id]
+
+    if start_date:
+        invoice_sql += " AND DATE(created_at) >= %s"
+        params.append(start_date)
+
+    if end_date:
+        invoice_sql += " AND DATE(created_at) <= %s"
+        params.append(end_date)
+
+    invoice_sql += " ORDER BY created_at ASC"
+    invoices = query_all(invoice_sql, tuple(params))
+
+    # Build payment query
+    payment_sql = """
+        SELECT id, amount, payment_method, created_at
+        FROM payments
+        WHERE client_id=%s
+    """
+    params2 = [client_id]
+
+    if start_date:
+        payment_sql += " AND DATE(created_at) >= %s"
+        params2.append(start_date)
+
+    if end_date:
+        payment_sql += " AND DATE(created_at) <= %s"
+        params2.append(end_date)
+
+    payment_sql += " ORDER BY created_at ASC"
+    payments = query_all(payment_sql, tuple(params2))
+
+    # Merge timeline
+    timeline = []
+
+    for i in invoices:
+        timeline.append({
+            "type": "invoice",
+            "date": i['created_at'],
+            "amount": i['total'],
+            "ref": i['invoice_no']
+        })
+
+    for p in payments:
+        timeline.append({
+            "type": "payment",
+            "date": p['created_at'],
+            "amount": p['amount'],
+            "ref": p['payment_method']
+        })
+
+    # Sort
+    timeline = sorted(timeline, key=lambda x: x['date'])
+
+    # Running balance
+    balance = 0
+    for t in timeline:
+        if t['type'] == 'invoice':
+            balance += t['amount']
+        else:
+            balance -= t['amount']
+        t['balance'] = balance
+
+    return client, timeline
+
+
+
+@app.route('/client/<int:client_id>/statement')
+@require_login
+def client_statement(client_id):
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    client, timeline = get_client_statement_data(client_id, start_date, end_date)
+
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for('clients'))
+
+    return render_template(
+        "client_statement.html",
+        client=client,
+        timeline=timeline,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+
 
 
 # --- Sales (simple flow) ---
