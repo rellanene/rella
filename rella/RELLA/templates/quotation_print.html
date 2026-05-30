@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quotation {{ quotation.q_number }}</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        h1 { text-align: center; }
+        .footer { margin-top: 40px; font-size: 12px; text-align:center; color:#555; }
+    </style>
+</head>
+<body>
+
+<h1>Quotation {{ quotation.q_number }}</h1>
+
+<p><strong>Client:</strong> {{ client.name }}</p>
+<p><strong>Date:</strong> {{ quotation.created_at }}</p>
+<p><strong>Valid Until:</strong> {{ quotation.valid_until }}</p>
+
+<table width="100%" border="1" cellspacing="0" cellpadding="6">
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td>{{ item.product_name }}</td>
+            <td>{{ item.qty }}</td>
+            <td>R {{ item.unit_price }}</td>
+            <td>R {{ item.line_total }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h3>Total: R {{ quotation.total_amount }}</h3>
+
+<div class="footer">
+    <p><strong>Disclaimer:</strong> This quotation is valid for a limited period only.</p>
+</div>
+
+<script>
+window.print();
+</script>
+
+</body>
+</html>

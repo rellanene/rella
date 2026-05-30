@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Client Credit - {{ client.name }}{% endblock %}
+{% block content %}
+
+<h1>Client Credit: {{ client.name }}</h1>
+
+<div class="section-card">
+    <div class="section-title">Running Balance & Limit</div>
+    <p><strong>Current Balance:</strong> R {{ credit.current_balance if credit else "0.00" }}</p>
+    <p><strong>Credit Limit:</strong> R {{ credit.credit_limit if credit else "0.00" }}</p>
+</div>
+
+<div class="section-card">
+    <div class="section-title">Filters & Actions</div>
+
+    <form method="get" class="filter-row">
+        <input type="date" name="start_date" value="{{ start_date or '' }}">
+        <input type="date" name="end_date" value="{{ end_date or '' }}">
+        <button class="btn-black">Filter</button>
+
+        <a class="btn-black"
+           href="{{ url_for('client_credit_export_csv', client_id=client.id, start_date=start_date, end_date=end_date) }}">
+            Export CSV
+        </a>
+
+        <a class="btn-black"
+           href="{{ url_for('client_credit_print', client_id=client.id, start_date=start_date, end_date=end_date) }}"
+           target="_blank">
+            Print PDF
+        </a>
+    </form>
+</div>
+
+<div class="section-card">
+    <div class="section-title">Capture Payment (Leave Footprint)</div>
+    <form method="post" action="{{ url_for('client_credit_pay', client_id=client.id) }}" enctype="multipart/form-data">
+        <input type="number" step="0.01" name="amount" placeholder="Amount paid" required>
+        <input type="text" name="note" placeholder="Reference / Note">
+        <input type="file" name="pop_file">
+        <button class="btn-gold">Save Payment</button>
+    </form>
+</div>
+
+<div class="section-card">
+    <div class="section-title">Credit Transactions</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Opening</th>
+                <th>Closing</th>
+                <th>Note</th>
+                <th>POP</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payments %}
+            <tr>
+                <td>{{ p.created_at }}</td>
+                <td>R {{ p.amount }}</td>
+                <td>R {{ p.opening_balance }}</td>
+                <td>R {{ p.closing_balance }}</td>
+                <td>{{ p.note }}</td>
+                <td>
+                    {% if p.pop_filename %}
+                    <a class="btn-black"
+                       href="{{ url_for('client_credit_pop_download', filename=p.pop_filename) }}">
+                        Download POP
+                    </a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+// example toast usage after flash bridge
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, msg in messages %}
+    window.RELLA && window.RELLA.toast("{{ msg }}", "{{ category }}");
+  {% endfor %}
+{% endwith %}
+</script>
+
+{% endblock %}

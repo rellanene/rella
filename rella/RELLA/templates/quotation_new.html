@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}New Quotation – {{ client.name }}{% endblock %}
+{% block content %}
+
+<h1>Create Quotation for {{ client.name }}</h1>
+
+<!-- ========================= -->
+<!--   QUOTATION HEADER INFO   -->
+<!-- ========================= -->
+
+<div class="section-card">
+    <div class="section-title">Quotation Details</div>
+    <p><strong>Quotation Number:</strong> {{ q_number }}</p>
+    <p><strong>Valid Until:</strong> {{ valid_until }}</p>
+</div>
+
+<!-- ========================= -->
+<!--   FORM STARTS HERE        -->
+<!-- ========================= -->
+
+<form id="quotationForm" method="post" action="{{ url_for('quotation_new', client_id=client.id) }}">
+
+<input type="hidden" name="items_json" id="items_json">
+
+<div class="section-card">
+    <div class="section-title">Add Products</div>
+
+    <input id="barcode-input" class="scan-input" placeholder="Scan barcode...">
+
+    <select id="productSelect" class="scan-input">
+        <option value="">Select product manually</option>
+        {% for p in products %}
+        <option value="{{ p.id }}" data-id="{{ p.id }}" data-name="{{ p.name }}" data-price="{{ p.retail_price }}">
+            {{ p.name }} – R {{ "%.2f"|format(p.retail_price) }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <table id="quoteTable" class="data-table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th style="width:60px;">Qty</th>
+                <th style="width:80px;">Price</th>
+                <th style="width:80px;">Total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div style="margin-top:10px;">
+        <strong>Total:</strong> R <span id="grandTotal">0.00</span>
+    </div>
+
+    <button type="button" id="saveQuotation" class="btn-gold" style="margin-top:10px;">
+        Save Quotation
+    </button>
+</div>
+
+</form>
+
+<!-- ========================= -->
+<!--   SEARCH EXISTING QUOTES  -->
+<!-- ========================= -->
+
+
+<!-- ========================= -->
+<!--   JAVASCRIPT LOGIC        -->
+<!-- ========================= -->
+
+<script>
+const tableBody = document.querySelector("#quoteTable tbody");
+const grandTotalEl = document.getElementById("grandTotal");
+
+function updateTotal() {
+    let total = 0;
+    tableBody.querySelectorAll("tr").forEach(row => {
+        total += parseFloat(row.querySelector(".row-total").textContent) || 0;
+    });
+    grandTotalEl.textContent = total.toFixed(2);
+}
+
+function addProductRow(id, name, price) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+        <td data-id="${id}">${name}</td>
+        <td><input type="number" value="1" min="1" class="qty-input" style="width:60px;"></td>
+        <td>R ${price.toFixed(2)}</td>
+        <td class="row-total">${price.toFixed(2)}</td>
+        <td><button class="btn-black remove-btn">X</button></td>
+    `;
+    tableBody.appendChild(row);
+    updateTotal();
+}
+
+document.getElementById("productSelect").addEventListener("change", e => {
+    const opt = e.target.selectedOptions[0];
+    if (!opt.value) return;
+    addProductRow(opt.dataset.id, opt.dataset.name, parseFloat(opt.dataset.price));
+    e.target.value = "";
+});
+
+tableBody.addEventListener("input", e => {
+    if (e.target.classList.contains("qty-input")) {
+        const row = e.target.closest("tr");
+        const qty = parseFloat(e.target.value);
+        const price = parseFloat(row.children[2].textContent.replace("R", ""));
+        row.querySelector(".row-total").textContent = (qty * price).toFixed(2);
+        updateTotal();
+    }
+});
+
+tableBody.addEventListener("click", e => {
+    if (e.target.classList.contains("remove-btn")) {
+        e.target.closest("tr").remove();
+        updateTotal();
+    }
+});
+
+document.getElementById("saveQuotation").addEventListener("click", () => {
+    const rows = document.querySelectorAll("#quoteTable tbody tr");
+    const items = [];
+
+    rows.forEach(row => {
+        items.push({
+            product_id: row.children[0].dataset.id,
+            name: row.children[0].textContent.trim(),
+            qty: row.querySelector(".qty-input").value,
+            price: parseFloat(row.children[2].textContent.replace("R", "").trim()),
+            total: parseFloat(row.querySelector(".row-total").textContent)
+        });
+    });
+
+    document.getElementById("items_json").value = JSON.stringify(items);
+    document.getElementById("quotationForm").submit();
+});
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, msg in messages %}
+    window.RELLA.toast("{{ msg }}", "{{ category }}");
+  {% endfor %}
+{% endwith %}
+</script>
+
+{% endblock %}

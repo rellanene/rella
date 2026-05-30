@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Quotation Files{% endblock %}
+{% block content %}
+
+<h1>Files for Quotation {{ quotation_id }}</h1>
+
+<div class="section-card">
+    <div class="section-title">Upload File</div>
+
+    <form action="{{ url_for('quotation_file_upload', quotation_id=quotation_id) }}"
+          method="post" enctype="multipart/form-data">
+
+        <input type="file" name="file" required class="scan-input">
+        <button class="btn-gold">Upload</button>
+    </form>
+</div>
+
+<div class="section-card">
+    <div class="section-title">Uploaded Files</div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Uploaded By</th>
+                <th>Date</th>
+                <th>Download</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in files %}
+            <tr>
+                <td>{{ f.filename }}</td>
+                <td>{{ f.uploaded_by }}</td>
+                <td>{{ f.created_at }}</td>
+                <td>
+                    <a class="btn-black"
+                       href="{{ url_for('quotation_file_download', filename=f.filename) }}">
+                        Download
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align:center; padding:20px;">
+                    No files uploaded yet.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <button onclick="window.history.back()" class="btn-black">← Back</button>
+</div>
+
+{% endblock %}

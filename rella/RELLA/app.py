@@ -14,6 +14,12 @@ import io
 import time
 from flask import send_from_directory
 import pdfkit
+from datetime import datetime, timedelta
+from decimal import Decimal
+import json
+
+
+
 
 app = Flask(__name__)
 
@@ -1250,6 +1256,646 @@ def export_client_statement_csv(client_id):
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+from datetime import datetime
+from flask import send_from_directory
+
+
+
+
+
+
+
+@app.route("/client/<int:client_id>/credit/export_csv")
+def client_credit_export_csv(client_id):
+    # Fetch credit transactions
+    rows = query_all("""
+        SELECT id, amount, opening_balance, closing_balance, reference, note, pop_filename, created_at, created_by
+        FROM client_credit_payments
+        WHERE client_id=%s
+        ORDER BY id DESC
+    """, (client_id,))
+
+    # Build CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header row
+    writer.writerow([
+        "ID", "Amount", "Opening Balance", "Closing Balance",
+        "Reference", "Note", "POP Filename", "Date", "Created By"
+    ])
+
+    # Data rows
+    for r in rows:
+        writer.writerow([
+            r["id"], r["amount"], r["opening_balance"], r["closing_balance"],
+            r["reference"], r["note"], r["pop_filename"], r["created_at"], r["created_by"]
+        ])
+
+    # Prepare response
+    csv_data = output.getvalue()
+    output.close()
+
+    filename = f"client_{client_id}_credit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+    # similar filter logic as view
+    # build CSV string and return Response with timestamped filename
+    ...
+
+@app.route("/client/<int:client_id>/credit/print", endpoint="client_credit_print_page")
+@require_login
+def client_credit_print(client_id):
+    # same data as client_credit, but render print template
+    return render_template("client_credit_print.html", ...)
+
+
+@app.route("/client/credit/pop/<filename>", endpoint="client_credit_pop_download_file")
+@require_login
+def client_credit_pop_download(filename):
+
+    return send_from_directory(app.config["CLIENT_UPLOAD_FOLDER"], filename, as_attachment=True)
+
+
+from datetime import datetime
+import random
+
+def generate_q_number():
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    rnd = random.randint(100, 999)
+    return f"Q{ts}{rnd}"
+
+
+def generate_q_number():
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    rnd = random.randint(100, 999)
+    return f"Q{ts}{rnd}"
+
+
+@app.route("/client/<int:client_id>/credit", endpoint="client_credit_page")
+@require_login
+def client_credit(client_id):
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    credit = query_one("SELECT * FROM client_credits WHERE client_id=%s", (client_id,))
+
+    sql = """
+        SELECT p.*, u.username AS staff_name
+        FROM client_credit_payments p
+        LEFT JOIN users u ON u.id = p.created_by
+        WHERE p.client_id=%s
+    """
+    params = [client_id]
+
+    if start_date:
+        sql += " AND DATE(p.created_at) >= %s"
+        params.append(start_date)
+    if end_date:
+        sql += " AND DATE(p.created_at) <= %s"
+        params.append(end_date)
+
+    sql += " ORDER BY p.created_at DESC"
+    payments = query_all(sql, tuple(params))
+
+    return render_template(
+        "client_credit.html",
+        client=client,
+        credit=credit,
+        payments=payments,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+
+@app.route("/client/<int:client_id>/credit/pay", methods=["POST"])
+@require_login
+def client_credit_pay(client_id):
+    amount = Decimal(request.form.get("amount") or "0")
+    note = request.form.get("note") or ""
+
+    # Use session directly (your decorator guarantees this exists)
+    user_id = session.get("user_id")
+
+    # Ensure credit record exists
+    credit = query_one("SELECT * FROM client_credits WHERE client_id=%s", (client_id,))
+    if not credit:
+        execute("""
+            INSERT INTO client_credits (client_id, opening_balance, current_balance, credit_limit, created_by, updated_by)
+            VALUES (%s, 0, 0, 0, %s, %s)
+        """, (client_id, user_id, user_id))
+        credit = query_one("SELECT * FROM client_credits WHERE client_id=%s", (client_id,))
+
+    opening = credit["current_balance"]
+    closing = opening - amount
+
+    # POP file upload
+    pop_filename = None
+    file = request.files.get("pop_file")
+    if file and file.filename:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = f"credit_pop_{client_id}_{ts}_{file.filename}"
+        file.save(os.path.join(app.config["CLIENT_UPLOAD_FOLDER"], safe_name))
+        pop_filename = safe_name
+
+    # Insert payment record
+    execute("""
+        INSERT INTO client_credit_payments
+        (client_id, amount, opening_balance, closing_balance, note, pop_filename, created_by)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
+    """, (client_id, amount, opening, closing, note, pop_filename, user_id))
+
+    # Update credit balance
+    execute("""
+        UPDATE client_credits SET current_balance=%s, updated_by=%s WHERE id=%s
+    """, (closing, user_id, credit["id"]))
+
+    flash("Client credit payment captured", "success")
+
+    # SAFE redirect — avoids BuildError
+    return redirect(f"/client/{client_id}/credit")
+
+
+
+@app.route("/client/<int:client_id>/laybuy/<int:laybuy_id>/export_csv")
+@require_login
+def laybuy_export_csv(client_id, laybuy_id):
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    sql = """
+        SELECT *
+        FROM client_laybuy_payments
+        WHERE laybuy_id=%s
+    """
+    params = [laybuy_id]
+
+    if start_date:
+        sql += " AND DATE(created_at) >= %s"
+        params.append(start_date)
+
+    if end_date:
+        sql += " AND DATE(created_at) <= %s"
+        params.append(end_date)
+
+    sql += " ORDER BY created_at DESC"
+    rows = query_all(sql, tuple(params))
+
+    csv_data = "Date,Amount,Note,Created By\n"
+    for r in rows:
+        csv_data += f"{r['created_at']},{r['amount']},{r['note']},{r['created_by']}\n"
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"laybuy_{laybuy_id}_{ts}.csv"
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@app.route("/client/<int:client_id>/credit/print")
+@require_login
+def client_credit_print(client_id):
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    credit = query_one("SELECT * FROM client_credits WHERE client_id=%s", (client_id,))
+    payments = query_all("""
+        SELECT * FROM client_credit_payments
+        WHERE client_id=%s ORDER BY created_at ASC
+    """, (client_id,))
+
+    return render_template("client_credit_print.html",
+                           client=client,
+                           credit=credit,
+                           payments=payments)
+
+
+@app.route("/client/credit/pop/<filename>")
+@require_login
+def client_credit_pop_download(filename):
+    return send_from_directory(app.config["CLIENT_UPLOAD_FOLDER"], filename, as_attachment=True)
+
+@app.route("/client/<int:client_id>/laybuy")
+@require_login
+def client_laybuy(client_id):
+    # Load client info
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for("clients"))
+
+    # Try to load the client's first lay-buy record
+    laybuy = query_one("""
+        SELECT *
+        FROM client_laybuys
+        WHERE client_id=%s
+        ORDER BY id ASC
+        LIMIT 1
+    """, (client_id,))
+
+    # If no lay-buy exists, create the first one
+    if not laybuy:
+        user_id = session.get("user_id")
+
+        execute("""
+            INSERT INTO client_laybuys
+                (client_id, status, start_date, expiry_date,
+                 total_amount, paid_amount, created_at, updated_at,
+                 created_by, updated_by)
+            VALUES
+                (%s, 'active', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 MONTH),
+                 0, 0, NOW(), NOW(),
+                 %s, %s)
+        """, (client_id, user_id, user_id))
+
+        # Reload the newly created lay-buy
+        laybuy = query_one("""
+            SELECT *
+            FROM client_laybuys
+            WHERE client_id=%s
+            ORDER BY id ASC
+            LIMIT 1
+        """, (client_id,))
+
+    # Load lay-buy items
+    items = query_all("""
+        SELECT li.*, p.name AS product_name
+        FROM client_laybuy_items li
+        LEFT JOIN products p ON p.id = li.product_id
+        WHERE li.laybuy_id=%s
+    """, (laybuy["id"],))
+
+    # Load lay-buy payments
+    payments = query_all("""
+        SELECT lp.*, u.username AS staff_name
+        FROM client_laybuy_payments lp
+        LEFT JOIN users u ON u.id = lp.created_by
+        WHERE lp.laybuy_id=%s
+        ORDER BY lp.created_at DESC
+    """, (laybuy["id"],))
+
+    # 🔥 Load products with the correct retail price column
+    products = query_all("""
+        SELECT id, name, retail_price
+        FROM products
+        ORDER BY name ASC
+    """)
+
+    return render_template(
+        "client_laybuy.html",
+        client=client,
+        laybuy=laybuy,
+        items=items,
+        payments=payments,
+        products=products
+    )
+
+
+
+
+
+
+
+
+@app.route("/laybuy/<int:laybuy_id>/pay", methods=["POST"])
+@require_login
+def laybuy_pay(laybuy_id):
+    amount = Decimal(request.form.get("amount") or "0")
+    note = request.form.get("note") or ""
+    user_id = session.get("user_id")   # FIXED: g.user does not exist
+
+    # Load lay-buy record
+    laybuy = query_one("SELECT * FROM client_laybuys WHERE id=%s", (laybuy_id,))
+    opening = laybuy["total_amount"] - laybuy["paid_amount"]
+    closing = opening - amount
+
+    # Handle POP upload
+    pop_filename = None
+    file = request.files.get("pop_file")
+    if file and file.filename:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = f"laybuy_pop_{laybuy_id}_{ts}_{file.filename}"
+        file.save(os.path.join(app.config["LAYBUY_UPLOAD_FOLDER"], safe_name))
+        pop_filename = safe_name
+
+    # Insert payment
+    execute("""
+        INSERT INTO client_laybuy_payments
+        (laybuy_id, amount, opening_balance, closing_balance, note, pop_filename, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (laybuy_id, amount, opening, closing, note, pop_filename, user_id))
+
+    # Update lay-buy totals
+    execute("""
+        UPDATE client_laybuys
+        SET paid_amount = paid_amount + %s
+        WHERE id=%s
+    """, (amount, laybuy_id))
+
+    flash("Lay‑buy payment captured", "success")
+    return redirect(url_for("client_laybuy", client_id=laybuy["client_id"]))
+
+#alone
+# Upload folders
+app.config["LAYBUY_UPLOAD_FOLDER"] = os.path.join("uploads", "laybuy")
+os.makedirs(app.config["LAYBUY_UPLOAD_FOLDER"], exist_ok=True)
+
+
+
+@app.route("/client/<int:client_id>/laybuy/<int:laybuy_id>/add_item", methods=["POST"])
+@require_login
+def laybuy_add_item(client_id, laybuy_id):
+    product_id = request.form["product_id"]
+    qty = float(request.form["qty"])
+    unit_price = float(request.form["unit_price"])
+    line_total = qty * unit_price
+
+    # Insert item (NO created_by column)
+    execute("""
+        INSERT INTO client_laybuy_items (laybuy_id, product_id, qty, unit_price, line_total)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (laybuy_id, product_id, qty, unit_price, line_total))
+
+    # Update lay-buy total
+    execute("""
+        UPDATE client_laybuys
+        SET total_amount = total_amount + %s
+        WHERE id=%s
+    """, (line_total, laybuy_id))
+
+    flash("Item added to lay‑buy.", "success")
+    return redirect(url_for("client_laybuy", client_id=client_id))
+
+
+
+
+
+@app.route("/laybuy/<int:laybuy_id>/export_csv", endpoint="laybuy_export_csv_page")
+@require_login
+def laybuy_export_csv(laybuy_id):
+
+    rows = query_all("""
+        SELECT * FROM client_laybuy_payments
+        WHERE laybuy_id=%s ORDER BY created_at ASC
+    """, (laybuy_id,))
+
+    csv_data = "Date,Amount,Opening,Closing,Note\n"
+    for r in rows:
+        csv_data += f"{r['created_at']},{r['amount']},{r['opening_balance']},{r['closing_balance']},{r['note']}\n"
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"laybuy_{laybuy_id}_{ts}.csv"
+
+    return Response(csv_data, mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
+@app.route("/laybuy/<int:laybuy_id>/print")
+@require_login
+def laybuy_print(laybuy_id):
+    laybuy = query_one("SELECT * FROM client_laybuys WHERE id=%s", (laybuy_id,))
+    items = query_all("SELECT * FROM client_laybuy_items WHERE laybuy_id=%s", (laybuy_id,))
+    payments = query_all("SELECT * FROM client_laybuy_payments WHERE laybuy_id=%s ORDER BY created_at ASC", (laybuy_id,))
+
+    return render_template("laybuy_print.html",
+                           laybuy=laybuy,
+                           items=items,
+                           payments=payments)
+
+
+@app.route("/laybuy/pop/<filename>")
+@require_login
+def laybuy_pop_download(filename):
+    return send_from_directory(app.config["LAYBUY_UPLOAD_FOLDER"], filename, as_attachment=True)
+
+
+@app.route("/client/<int:client_id>/quotation/new", methods=["GET", "POST"])
+@require_login
+def quotation_new(client_id):
+    if request.method == "POST":
+        items_json = request.form.get("items_json")
+        items = json.loads(items_json or "[]")
+
+        # Calculate total
+        total = sum(item["total"] for item in items)
+
+        # Generate quotation number
+        q_number = generate_q_number()
+
+        # Save quotation header
+        execute("""
+            INSERT INTO client_quotations 
+            (client_id, q_number, total_amount, status, valid_until, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            client_id,
+            q_number,
+            total,
+            "Draft",
+            datetime.now().date(),
+            session["user_id"]
+        ))
+
+        # Fetch quotation ID
+        quotation = query_one(
+            "SELECT id FROM client_quotations WHERE q_number=%s",
+            (q_number,)
+        )
+
+        # Save quotation items (FIXED HERE)
+        for item in items:
+
+            # Lookup product_id using product name
+            product = query_one(
+                "SELECT id FROM products WHERE name=%s",
+                (item["name"],)
+            )
+
+            execute("""
+                INSERT INTO client_quotation_items 
+                (quotation_id, product_id, qty, unit_price, line_total)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                quotation["id"],
+                product["id"],      # resolved from DB
+                item["qty"],
+                item["price"],
+                item["total"]
+            ))
+
+        flash("Quotation saved successfully", "success")
+        return redirect(f"/client/{client_id}/quotation")
+
+    # GET request — render form
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    products = query_all("SELECT * FROM products ORDER BY name ASC")
+    q_number = generate_q_number()
+    valid_until = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+
+    return render_template(
+        "quotation_new.html",
+        client=client,
+        products=products,
+        q_number=q_number,
+        valid_until=valid_until
+    )
+
+
+
+
+    
+@app.route("/client/<int:client_id>/quotation", endpoint="client_quotation_page")
+@require_login
+def client_quotation(client_id):
+    q = request.args.get("q")
+
+    # Fetch client
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "error")
+        return redirect(url_for("clients_page"))
+
+    # Base query
+    sql = """
+        SELECT *
+        FROM client_quotations
+        WHERE client_id=%s
+    """
+    params = [client_id]
+
+    # Search filter
+    if q:
+        sql += " AND (q_number LIKE %s OR status LIKE %s)"
+        params.extend([f"%{q}%", f"%{q}%"])
+
+    # Final ordering
+    sql += " ORDER BY id DESC"
+
+    # Execute query
+    quotations = query_all(sql, tuple(params))
+
+    return render_template(
+        "client_quotation.html",
+        client=client,
+        quotations=quotations,
+        q=q
+    )
+
+    
+
+
+
+
+
+
+
+@app.route("/quotation/save", methods=["POST"])
+@require_login
+def quotation_save():
+    client_id = request.form.get("client_id")
+    q_number = request.form.get("q_number")
+    valid_until = request.form.get("valid_until")
+    total = Decimal(request.form.get("total") or "0")
+    user_id = g.user["id"]
+
+    execute("""
+        INSERT INTO client_quotations
+        (client_id, q_number, total_amount, valid_until, created_by)
+        VALUES (%s,%s,%s,%s,%s)
+    """, (client_id, q_number, total, valid_until, user_id))
+
+    quotation_id = query_one("SELECT LAST_INSERT_ID() AS id")["id"]
+
+    items = json.loads(request.form.get("items_json"))
+
+    for item in items:
+        execute("""
+            INSERT INTO client_quotation_items
+            (quotation_id, product_id, qty, unit_price, line_total)
+            VALUES (%s,%s,%s,%s,%s)
+        """, (quotation_id, item["id"], item["qty"], item["price"], item["total"]))
+
+    flash("Quotation saved", "success")
+    return jsonify({"success": True, "quotation_id": quotation_id})
+
+
+@app.route("/quotation/<int:quotation_id>/print")
+@require_login
+def quotation_print(quotation_id):
+    quotation = query_one("SELECT * FROM client_quotations WHERE id=%s", (quotation_id,))
+    client = query_one("SELECT * FROM clients WHERE id=%s", (quotation["client_id"],))
+    items = query_all("""
+        SELECT qi.*, p.name AS product_name
+        FROM client_quotation_items qi
+        LEFT JOIN products p ON p.id = qi.product_id
+        WHERE qi.quotation_id=%s
+    """, (quotation_id,))
+
+    return render_template("quotation_print.html",
+                           quotation=quotation,
+                           client=client,
+                           items=items)
+
+
+@app.route("/quotation/<int:quotation_id>/files/upload", methods=["GET", "POST"])
+def quotation_file_upload(quotation_id):
+
+    # Bypass decorator: get user_id directly from session
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return redirect("/login")
+
+    if request.method == "POST":
+        file = request.files.get("file")
+
+        if file and file.filename:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = f"quotation_{quotation_id}_{ts}_{file.filename}"
+            file.save(os.path.join(app.config["QUOTATION_UPLOAD_FOLDER"], safe_name))
+
+            execute("""
+                INSERT INTO client_quotation_files (quotation_id, filename, uploaded_by)
+                VALUES (%s, %s, %s)
+            """, (quotation_id, safe_name, user_id))
+
+            flash("File uploaded", "success")
+            return redirect(url_for("quotation_file_upload", quotation_id=quotation_id))
+
+    # GET request — show file list
+    files = query_all("""
+        SELECT * FROM client_quotation_files
+        WHERE quotation_id=%s
+        ORDER BY id DESC
+    """, (quotation_id,))
+
+    return render_template("quotation_files.html", quotation_id=quotation_id, files=files)
+
+# Quotation file uploads
+app.config["QUOTATION_UPLOAD_FOLDER"] = os.path.join("uploads", "quotations")
+os.makedirs(app.config["QUOTATION_UPLOAD_FOLDER"], exist_ok=True)
+
+
+@app.route("/quotation/files/download/<filename>")
+def quotation_file_download(filename):
+    folder = app.config["QUOTATION_UPLOAD_FOLDER"]
+    return send_from_directory(folder, filename, as_attachment=True)
+
+
+# Client credit payment uploads
+app.config["CLIENT_UPLOAD_FOLDER"] = os.path.join("uploads", "client_credit")
+os.makedirs(app.config["CLIENT_UPLOAD_FOLDER"], exist_ok=True)
+
+
+
 
 
 @app.route('/client/<int:client_id>/statement/print')

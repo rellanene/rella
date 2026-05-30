@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Client Quotations{% endblock %}
+{% block content %}
+
+<h1>Quotations for {{ client.name }}</h1>
+
+<div class="section-card">
+    <div class="section-title">Search Quotations</div>
+
+    <form method="get">
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="Search by Q-number, status, date..." class="scan-input">
+        <button class="btn-black">Search</button>
+    </form>
+</div>
+
+<div class="section-card">
+    <div class="section-title">All Quotations</div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Q‑Number</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Valid Until</th>
+                <th>Created At</th>
+                <th>Print</th>
+                <th>Files</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quotations %}
+            <tr>
+                <td>{{ q.q_number }}</td>
+                <td>R {{ q.total_amount }}</td>
+                <td>{{ q.status }}</td>
+                <td>{{ q.valid_until }}</td>
+                <td>{{ q.created_at }}</td>
+                <td>
+                    <a class="btn-black"
+                       href="{{ url_for('quotation_print', quotation_id=q.id) }}"
+                       target="_blank">
+                        Print
+                    </a>
+                </td>
+                <td>
+                    <a class="btn-black"
+                       href="{{ url_for('quotation_file_upload', quotation_id=q.id) }}">
+                        Files
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align:center; padding:20px;">
+                    No quotations found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <br>
+    <button onclick="window.history.back()" 
+        style="background-color:#1a1a1a; color:#ffd700; font-weight:bold; border:none; border-radius:5px; padding:8px 16px; cursor:pointer;">
+         Back
+    </button>
+
+    <button onclick="window.location.href='{{ url_for('quotation_new', client_id=client.id) }}'"
+        class="btn-gold"
+        style="margin-left:10px;">
+        Create New Quotation
+    </button>
+</div>
+
+<script>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, msg in messages %}
+    window.RELLA.toast("{{ msg }}", "{{ category }}");
+  {% endfor %}
+{% endwith %}
+</script>
+
+{% endblock %}
