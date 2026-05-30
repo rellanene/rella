@@ -1725,8 +1725,16 @@ def client_laybuy_manage(client_id):
         flash("Client not found", "danger")
         return redirect(url_for("clients"))
 
+    # Load all lay-buys for this client
+    laybuys = query_all("""
+        SELECT laybuy_number, status
+        FROM client_laybuys
+        WHERE client_id=%s
+        ORDER BY id DESC
+    """, (client_id,))
+
     if request.method == "POST":
-        number = (request.form.get("laybuy_number") or "").strip()
+        number = request.form.get("laybuy_number")
         laybuy = query_one("""
             SELECT * FROM client_laybuys
             WHERE client_id=%s AND laybuy_number=%s
@@ -1738,7 +1746,46 @@ def client_laybuy_manage(client_id):
 
         return redirect(url_for("laybuy_view", laybuy_id=laybuy["id"]))
 
-    return render_template("client_laybuy_manage.html", client=client)
+    return render_template("client_laybuy_manage.html", client=client, laybuys=laybuys)
+
+
+@app.route("/laybuy/print", methods=["GET"])
+@require_login
+def laybuy_print_statement():
+    laybuy_number = request.args.get("laybuy_number")
+    if not laybuy_number:
+        flash("Please select a Lay‑Buy number to print.", "danger")
+        return redirect(request.referrer or url_for("clients"))
+
+    laybuy = query_one("SELECT * FROM client_laybuys WHERE laybuy_number=%s", (laybuy_number,))
+    if not laybuy:
+        flash("Lay‑Buy not found.", "danger")
+        return redirect(request.referrer or url_for("clients"))
+
+    client = query_one("SELECT * FROM clients WHERE id=%s", (laybuy["client_id"],))
+
+    items = query_all("""
+        SELECT li.*, p.name AS product_name
+        FROM client_laybuy_items li
+        LEFT JOIN products p ON p.id = li.product_id
+        WHERE li.laybuy_id=%s
+    """, (laybuy["id"],))
+
+    payments = query_all("""
+        SELECT *
+        FROM client_laybuy_payments
+        WHERE laybuy_id=%s
+        ORDER BY created_at ASC
+    """, (laybuy["id"],))
+
+    return render_template(
+        "laybuy_statement.html",
+        client=client,
+        laybuy=laybuy,
+        items=items,
+        payments=payments
+    )
+
 
 
 

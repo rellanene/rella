@@ -1,0 +1,100 @@
+
+{% block title %}Lay‑Buy Statement – {{ laybuy.laybuy_number }}{% endblock %}
+{% block content %}
+
+<style>
+    .statement-container {
+        background: white;
+        padding: 25px;
+        border-radius: 8px;
+        margin-top: 20px;
+        border-left: 4px solid #d4af37;
+    }
+    h2 {
+        color: #d4af37;
+        margin-bottom: 10px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    th, td {
+        padding: 8px;
+        border-bottom: 1px solid #ddd;
+    }
+    th {
+        background-color: #f8f8f8;
+        text-align: left;
+    }
+    .btn-print {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+    .btn-print:hover { background-color: #b8952f; }
+</style>
+
+<div class="statement-container">
+    <h2>Lay‑Buy Statement</h2>
+    <p><strong>Lay‑Buy Number:</strong> {{ laybuy.laybuy_number }}</p>
+    <p><strong>Client:</strong> {{ client.name }}</p>
+    <p><strong>Status:</strong> {{ laybuy.status|capitalize }}</p>
+    <p><strong>Start Date:</strong> {{ laybuy.start_date }}</p>
+    <p><strong>Expiry Date:</strong> {{ laybuy.expiry_date }}</p>
+
+    <button class="btn-print" onclick="window.print()">Print</button>
+
+    <h3>Items</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.product_name }}</td>
+                <td>{{ item.qty }}</td>
+                <td>R {{ item.unit_price }}</td>
+                <td>R {{ item.line_total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Payments</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Amount Paid</th>
+                <th>Opening Balance</th>
+                <th>Closing Balance</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payments %}
+            <tr>
+                <td>{{ p.created_at }}</td>
+                <td>R {{ p.amount }}</td>
+                <td>R {{ p.opening_balance }}</td>
+                <td>R {{ p.closing_balance }}</td>
+                <td>{{ p.note }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

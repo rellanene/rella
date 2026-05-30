@@ -2,14 +2,69 @@
 {% block title %}Manage Lay‑Buy – {{ client.name }}{% endblock %}
 {% block content %}
 
+<style>
+    .section-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+        border-left: 4px solid #d4af37;
+    }
+    .section-title {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #d4af37;
+    }
+    .btn-gold {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-gold:hover { background-color: #b8952f; }
+
+    select {
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        font-size: 15px;
+        width: 220px;
+    }
+</style>
+
 <h1>Manage Lay‑Buy: {{ client.name }}</h1>
 
 <div class="section-card">
     <div class="section-title">Open Lay‑Buy</div>
 
     <form method="post" class="filter-row">
-        <input type="text" name="laybuy_number" placeholder="Lay‑Buy Number (e.g. LB12)" required>
+        <select name="laybuy_number" required>
+            <option value="">Select Lay‑Buy Number</option>
+            {% for lb in laybuys %}
+            <option value="{{ lb.laybuy_number }}">
+                {{ lb.laybuy_number }} ({{ lb.status|capitalize }})
+            </option>
+            {% endfor %}
+        </select>
+
         <button class="btn-gold">Open Lay‑Buy</button>
+    </form>
+
+    <!-- Print Statement Button -->
+    <form method="get" action="{{ url_for('laybuy_print_statement') }}" style="margin-top: 15px;">
+        <select name="laybuy_number" required>
+            <option value="">Select Lay‑Buy</option>
+            {% for lb in laybuys %}
+            <option value="{{ lb.laybuy_number }}">
+                {{ lb.laybuy_number }} ({{ lb.status|capitalize }})
+            </option>
+            {% endfor %}
+        </select>
+        <button class="btn-black">Print Statement</button>
     </form>
 </div>
 
