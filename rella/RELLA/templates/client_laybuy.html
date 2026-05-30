@@ -17,6 +17,15 @@
     </p>
 </div>
 
+{% if laybuy.status != 'archived' and laybuy.paid_amount >= laybuy.total_amount %}
+<form method="post" action="{{ url_for('laybuy_archive', laybuy_id=laybuy.id) }}">
+    <button class="btn-black">Archive Lay‑Buy</button>
+</form>
+{% elif laybuy.status == 'archived' %}
+<p><strong>Archived:</strong> {{ laybuy.archived_at }}</p>
+{% endif %}
+
+
 <div class="section-card">
     <div class="section-title">Filters & Actions</div>
 

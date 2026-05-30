@@ -1609,6 +1609,139 @@ app.config["LAYBUY_UPLOAD_FOLDER"] = os.path.join("uploads", "laybuy")
 os.makedirs(app.config["LAYBUY_UPLOAD_FOLDER"], exist_ok=True)
 
 
+@app.route("/client/<int:client_id>/laybuy/choice")
+@require_login
+def client_laybuy_choice(client_id):
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for("clients"))
+    return render_template("client_laybuy_choice.html", client=client)
+
+
+@app.route("/client/<int:client_id>/laybuy/create")
+@require_login
+def client_laybuy_create(client_id):
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for("clients"))
+
+    user_id = session.get("user_id")
+
+    # create shell lay‑buy
+    execute("""
+        INSERT INTO client_laybuys
+            (client_id, status, start_date, expiry_date,
+             total_amount, paid_amount, created_at, updated_at, created_by, updated_by)
+        VALUES
+            (%s, 'active', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 MONTH),
+             0, 0, NOW(), NOW(), %s, %s)
+    """, (client_id, user_id, user_id))
+
+    laybuy = query_one("""
+        SELECT * FROM client_laybuys
+        WHERE client_id=%s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (client_id,))
+
+    # assign lay‑buy number
+    execute("""
+        UPDATE client_laybuys
+        SET laybuy_number = %s
+        WHERE id=%s
+    """, (f"LB{laybuy['id']}", laybuy["id"]))
+
+    flash(f"New Lay‑Buy created: LB{laybuy['id']}", "success")
+    return redirect(url_for("laybuy_view", laybuy_id=laybuy["id"]))
+
+
+@app.route("/laybuy/<int:laybuy_id>")
+@require_login
+def laybuy_view(laybuy_id):
+    laybuy = query_one("SELECT * FROM client_laybuys WHERE id=%s", (laybuy_id,))
+    if not laybuy:
+        flash("Lay‑Buy not found", "danger")
+        return redirect(url_for("clients"))
+
+    client = query_one("SELECT * FROM clients WHERE id=%s", (laybuy["client_id"],))
+
+    items = query_all("""
+        SELECT li.*, p.name AS product_name
+        FROM client_laybuy_items li
+        LEFT JOIN products p ON p.id = li.product_id
+        WHERE li.laybuy_id=%s
+    """, (laybuy_id,))
+
+    payments = query_all("""
+        SELECT lp.*, u.username AS staff_name
+        FROM client_laybuy_payments lp
+        LEFT JOIN users u ON u.id = lp.created_by
+        WHERE lp.laybuy_id=%s
+        ORDER BY lp.created_at DESC
+    """, (laybuy_id,))
+
+    products = query_all("""
+        SELECT id, name, retail_price
+        FROM products
+        ORDER BY name ASC
+    """)
+
+    return render_template(
+        "client_laybuy.html",
+        client=client,
+        laybuy=laybuy,
+        items=items,
+        payments=payments,
+        products=products
+    )
+
+
+
+@app.route("/laybuy/<int:laybuy_id>/archive", methods=["POST"])
+@require_login
+def laybuy_archive(laybuy_id):
+    laybuy = query_one("SELECT * FROM client_laybuys WHERE id=%s", (laybuy_id,))
+    if not laybuy:
+        flash("Lay‑Buy not found", "danger")
+        return redirect(url_for("clients"))
+
+    execute("""
+        UPDATE client_laybuys
+        SET status='archived', archived_at=NOW()
+        WHERE id=%s
+    """, (laybuy_id,))
+
+    flash("Lay‑Buy archived.", "success")
+    return redirect(url_for("laybuy_view", laybuy_id=laybuy_id))
+
+
+@app.route("/client/<int:client_id>/laybuy/manage", methods=["GET", "POST"])
+@require_login
+def client_laybuy_manage(client_id):
+    client = query_one("SELECT * FROM clients WHERE id=%s", (client_id,))
+    if not client:
+        flash("Client not found", "danger")
+        return redirect(url_for("clients"))
+
+    if request.method == "POST":
+        number = (request.form.get("laybuy_number") or "").strip()
+        laybuy = query_one("""
+            SELECT * FROM client_laybuys
+            WHERE client_id=%s AND laybuy_number=%s
+        """, (client_id, number))
+
+        if not laybuy:
+            flash("Lay‑Buy not found for this client.", "danger")
+            return redirect(url_for("client_laybuy_manage", client_id=client_id))
+
+        return redirect(url_for("laybuy_view", laybuy_id=laybuy["id"]))
+
+    return render_template("client_laybuy_manage.html", client=client)
+
+
+
 
 @app.route("/client/<int:client_id>/laybuy/<int:laybuy_id>/add_item", methods=["POST"])
 @require_login

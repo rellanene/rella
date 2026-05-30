@@ -74,11 +74,12 @@
     </form>
 
     <!-- 2. Lay-buy -->
-    <form action="{{ url_for('client_laybuy', client_id=client.id) }}" method="get" style="display:inline-block;">
-        <button type="submit" class="btn-black">
-            Lay-buy
-        </button>
-    </form>
+    <form action="{{ url_for('client_laybuy_choice', client_id=client.id) }}" method="get" style="display:inline-block;">
+    	<button type="submit" class="btn-black">
+        	Lay-buy
+    	</button>
+	</form>
+    
 
     <!-- 3. Quotation -->
     <form action="{{ url_for('client_quotation_page', client_id=client.id) }}" method="get" style="display:inline-block;">

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Manage Lay‑Buy – {{ client.name }}{% endblock %}
+{% block content %}
+
+<h1>Manage Lay‑Buy: {{ client.name }}</h1>
+
+<div class="section-card">
+    <div class="section-title">Open Lay‑Buy</div>
+
+    <form method="post" class="filter-row">
+        <input type="text" name="laybuy_number" placeholder="Lay‑Buy Number (e.g. LB12)" required>
+        <button class="btn-gold">Open Lay‑Buy</button>
+    </form>
+</div>
+
+{% endblock %}
