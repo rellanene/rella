@@ -2233,6 +2233,18 @@ def get_client_statement_data(client_id, start_date=None, end_date=None):
 
     return client, timeline
 
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+app.config["QUOTATION_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "quotations")
+os.makedirs(app.config["QUOTATION_UPLOAD_FOLDER"], exist_ok=True)
+
+@app.route("/quotation/files/download/<path:filename>", endpoint="quotation_file_download")
+@require_login
+def quotation_file_download(filename):
+    folder = app.config["QUOTATION_UPLOAD_FOLDER"]
+    return send_from_directory(folder, filename, as_attachment=True)
+
+
+
 
 
 @app.route('/client/<int:client_id>/statement')
