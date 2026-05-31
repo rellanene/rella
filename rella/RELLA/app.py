@@ -1046,8 +1046,9 @@ def client_upload(client_id):
         flash("No file selected", "danger")
         return redirect(url_for('client_portfolio', client_id=client_id))
 
-    # Ensure upload directory exists
-    upload_dir = os.path.join(app.root_path, "uploads", "clients")
+    # Absolute upload directory for packaged app
+    BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+    upload_dir = os.path.join(BASE_UPLOAD_PATH, "clients")
     os.makedirs(upload_dir, exist_ok=True)
 
     # Secure filename and save
@@ -1070,6 +1071,7 @@ def client_upload(client_id):
 
     flash("Document uploaded successfully.", "success")
     return redirect(url_for('client_portfolio', client_id=client_id))
+
 
 
 
@@ -1315,6 +1317,11 @@ def client_credit_print(client_id):
     # same data as client_credit, but render print template
     return render_template("client_credit_print.html", ...)
 
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+
+app.config["CLIENT_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "client_credit")
+os.makedirs(app.config["CLIENT_UPLOAD_FOLDER"], exist_ok=True)
+
 
 @app.route("/client/credit/pop/<filename>", endpoint="client_credit_pop_download_file")
 @require_login
@@ -1477,6 +1484,11 @@ def client_credit_print(client_id):
                            credit=credit,
                            payments=payments)
 
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+
+app.config["CLIENT_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "client_credit")
+os.makedirs(app.config["CLIENT_UPLOAD_FOLDER"], exist_ok=True)
+
 
 @app.route("/client/credit/pop/<filename>")
 @require_login
@@ -1604,9 +1616,35 @@ def laybuy_pay(laybuy_id):
     return redirect(url_for("client_laybuy", client_id=laybuy["client_id"]))
 
 #alone
-# Upload folders
-app.config["LAYBUY_UPLOAD_FOLDER"] = os.path.join("uploads", "laybuy")
+# Absolute path for packaged app uploads
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+
+# Lay‑Buy upload folder
+app.config["LAYBUY_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "laybuy")
 os.makedirs(app.config["LAYBUY_UPLOAD_FOLDER"], exist_ok=True)
+
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+
+app.config["LAYBUY_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "laybuy")
+os.makedirs(app.config["LAYBUY_UPLOAD_FOLDER"], exist_ok=True)
+
+
+@app.route("/laybuy/upload", methods=["POST"])
+@require_login
+def laybuy_upload():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("No file selected.", "danger")
+        return redirect(request.referrer)
+
+    save_path = os.path.join(app.config["LAYBUY_UPLOAD_FOLDER"], secure_filename(file.filename))
+    file.save(save_path)
+
+    flash("Lay‑Buy file uploaded successfully.", "success")
+    return redirect(request.referrer)
+
+
+
 
 
 @app.route("/client/<int:client_id>/laybuy/choice")
@@ -1851,10 +1889,19 @@ def laybuy_print(laybuy_id):
                            payments=payments)
 
 
-@app.route("/laybuy/pop/<filename>")
+@app.route("/laybuy/pop/<path:filename>")
 @require_login
 def laybuy_pop_download(filename):
-    return send_from_directory(app.config["LAYBUY_UPLOAD_FOLDER"], filename, as_attachment=True)
+    # Absolute path for packaged app uploads
+    BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+    laybuy_folder = os.path.join(BASE_UPLOAD_PATH, "laybuy")
+
+    # Ensure folder exists
+    os.makedirs(laybuy_folder, exist_ok=True)
+
+    # Serve file from laybuy folder
+    return send_from_directory(laybuy_folder, filename, as_attachment=True)
+
 
 
 @app.route("/client/<int:client_id>/quotation/new", methods=["GET", "POST"])
@@ -2025,12 +2072,19 @@ def quotation_print(quotation_id):
                            items=items)
 
 
+#Alone
+# Absolute base path for packaged app
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+
+# Quotation upload folder
+app.config["QUOTATION_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "quotations")
+os.makedirs(app.config["QUOTATION_UPLOAD_FOLDER"], exist_ok=True)
+
+
 @app.route("/quotation/<int:quotation_id>/files/upload", methods=["GET", "POST"])
 def quotation_file_upload(quotation_id):
 
-    # Bypass decorator: get user_id directly from session
     user_id = session.get("user_id")
-
     if not user_id:
         return redirect("/login")
 
@@ -2040,6 +2094,8 @@ def quotation_file_upload(quotation_id):
         if file and file.filename:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             safe_name = f"quotation_{quotation_id}_{ts}_{file.filename}"
+
+            # Save to absolute folder
             file.save(os.path.join(app.config["QUOTATION_UPLOAD_FOLDER"], safe_name))
 
             execute("""
@@ -2050,7 +2106,6 @@ def quotation_file_upload(quotation_id):
             flash("File uploaded", "success")
             return redirect(url_for("quotation_file_upload", quotation_id=quotation_id))
 
-    # GET request — show file list
     files = query_all("""
         SELECT * FROM client_quotation_files
         WHERE quotation_id=%s
@@ -2059,20 +2114,21 @@ def quotation_file_upload(quotation_id):
 
     return render_template("quotation_files.html", quotation_id=quotation_id, files=files)
 
-# Quotation file uploads
-app.config["QUOTATION_UPLOAD_FOLDER"] = os.path.join("uploads", "quotations")
-os.makedirs(app.config["QUOTATION_UPLOAD_FOLDER"], exist_ok=True)
 
 
-@app.route("/quotation/files/download/<filename>")
-def quotation_file_download(filename):
-    folder = app.config["QUOTATION_UPLOAD_FOLDER"]
-    return send_from_directory(folder, filename, as_attachment=True)
-
-
-# Client credit payment uploads
 app.config["CLIENT_UPLOAD_FOLDER"] = os.path.join("uploads", "client_credit")
 os.makedirs(app.config["CLIENT_UPLOAD_FOLDER"], exist_ok=True)
+
+BASE_UPLOAD_PATH = r"C:\Program Files (x86)\RELLA8.1\RELLA8.1\uploads"
+
+# Quotation uploads
+app.config["QUOTATION_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "quotations")
+os.makedirs(app.config["QUOTATION_UPLOAD_FOLDER"], exist_ok=True)
+
+# Client credit uploads
+app.config["CLIENT_UPLOAD_FOLDER"] = os.path.join(BASE_UPLOAD_PATH, "client_credit")
+os.makedirs(app.config["CLIENT_UPLOAD_FOLDER"], exist_ok=True)
+
 
 
 
