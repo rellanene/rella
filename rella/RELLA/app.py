@@ -628,7 +628,6 @@ def dashboard():
     # STAFF DASHBOARD
     # ============================================================
     if role == "staff":
-
         cursor.execute("""
             SELECT 
                 SUM(status='pending') AS pending,
@@ -672,16 +671,12 @@ def dashboard():
     # ADMIN DASHBOARD
     # ============================================================
     else:
-    
         # PRODUCTS
-        cursor.execute("""
-            SELECT name, price
-            FROM products
-        """)
+        cursor.execute("SELECT name, price FROM products")
         rows = cursor.fetchall() or []
         products_labels = [r["name"] for r in rows] or ["No products"]
         products_data = [float(r["price"] or 0) for r in rows] or [0]
-    
+
         # CLIENTS
         cursor.execute("""
             SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS total
@@ -693,7 +688,7 @@ def dashboard():
         rows = cursor.fetchall() or []
         clients_labels = [r["month"] for r in rows] or ["No data"]
         clients_data = [r["total"] for r in rows] or [0]
-    
+
         # SALES RECORDS
         cursor.execute("""
             SELECT DATE(created_at) AS day, SUM(total) AS total
@@ -703,19 +698,18 @@ def dashboard():
             ORDER BY day ASC
         """)
         rows = cursor.fetchall() or []
-    
         sales_map = {str(r["day"]): float(r["total"] or 0) for r in rows}
-    
+
         from datetime import datetime, timedelta
         records_labels = []
         records_data = []
-    
+
         for i in range(6, -1, -1):
             day = (datetime.now() - timedelta(days=i)).date()
             day_str = str(day)
             records_labels.append(day_str)
             records_data.append(sales_map.get(day_str, 0))
-    
+
         # STORES STOCK LEVELS
         cursor.execute("""
             SELECT s.name AS store_name, SUM(ss.quantity) AS total_stock
@@ -726,7 +720,7 @@ def dashboard():
         rows = cursor.fetchall() or []
         stores_labels = [r["store_name"] for r in rows] or ["No Stores"]
         stores_data = [float(r["total_stock"] or 0) for r in rows] or [0.01]
-    
+
         # FINANCES SUMMARY
         cursor.execute("""
             SELECT 
@@ -735,16 +729,31 @@ def dashboard():
                 (SELECT COALESCE(SUM(cost),0) FROM stock_in) AS stock_cost
         """)
         row = cursor.fetchone() or {}
-    
         income = float(row.get("income", 0))
         expenses = float(row.get("expenses", 0))
         stock_cost = float(row.get("stock_cost", 0))
-    
-        if income == 0 and expenses == 0 and stock_cost == 0:
-            finances_data = [0.01, 0.01, 0.01]
-        else:
-            finances_data = [income, expenses, stock_cost]
-    
+        finances_data = [income or 0.01, expenses or 0.01, stock_cost or 0.01]
+
+        # TASK INSIGHTS (with COALESCE)
+        cursor.execute("""
+            SELECT COALESCE(status, 'unspecified') AS status, COUNT(*) AS count
+            FROM tasks
+            GROUP BY status
+        """)
+        rows = cursor.fetchall() or []
+        task_labels = [r["status"] for r in rows] or ["No Data"]
+        task_values = [r["count"] for r in rows] or [0]
+
+        # LAY‑BUY INSIGHTS
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(total_amount), 0) AS total_expected,
+                COALESCE(SUM(paid_amount), 0) AS total_paid,
+                COALESCE(SUM(total_amount - paid_amount), 0) AS total_outstanding
+            FROM client_laybuys
+        """)
+        laybuy_data = cursor.fetchone() or {"total_expected": 0, "total_paid": 0, "total_outstanding": 0}
+
         return render_template(
             "dashboard.html",
             user=user,
@@ -756,8 +765,113 @@ def dashboard():
             records_data=records_data,
             stores_labels=stores_labels,
             stores_data=stores_data,
-            finances_data=finances_data
+            finances_data=finances_data,
+            laybuy_data=laybuy_data,
+            task_labels=task_labels,
+            task_values=task_values
         )
+
+        
+@app.route("/api/insights/laybuys")
+@require_login
+def api_laybuy_insights():
+    user = current_user()
+    if user["role"] != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = query_one("""
+        SELECT 
+            COUNT(*) AS total_laybuys,
+            COALESCE(SUM(total_amount), 0) AS total_expected,
+            COALESCE(SUM(paid_amount), 0) AS total_paid,
+            COALESCE(SUM(total_amount - paid_amount), 0) AS total_outstanding
+        FROM client_laybuys
+    """)
+
+    return jsonify(data)
+
+@app.route("/dashboard/laybuy_chart_data")
+@require_login
+def laybuy_chart_data():
+    user = current_user()
+    if user["role"] != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = query_one("""
+        SELECT 
+            COALESCE(SUM(total_amount), 0) AS total_expected,
+            COALESCE(SUM(paid_amount), 0) AS total_paid,
+            COALESCE(SUM(total_amount - paid_amount), 0) AS total_outstanding
+        FROM client_laybuys
+    """)
+
+    return jsonify(data)
+
+@app.route("/dashboard2", endpoint="dashboard_page")
+@require_login
+def dashboard_page():
+    user = current_user()
+
+    # Task insights
+    task_rows = query_all("""
+        SELECT status, COUNT(*) AS count
+        FROM tasks
+        GROUP BY status
+    """)
+
+    task_labels = [r["status"] for r in task_rows]
+    task_values = [r["count"] for r in task_rows]
+
+    # Lay‑Buy insights
+    laybuy = query_one("""
+        SELECT 
+            COALESCE(SUM(total_amount), 0) AS total_expected,
+            COALESCE(SUM(paid_amount), 0) AS total_paid,
+            COALESCE(SUM(total_amount - paid_amount), 0) AS total_outstanding
+        FROM client_laybuys
+    """)
+
+    return render_template(
+        "dashboard.html",
+        user=user,
+        products_labels=products_labels,
+        products_data=products_data,
+        clients_labels=clients_labels,
+        clients_data=clients_data,
+        records_labels=records_labels,
+        records_data=records_data,
+        stores_labels=stores_labels,
+        stores_data=stores_data,
+        finances_data=finances_data,
+        laybuy_data=laybuy,
+        task_labels=task_labels,
+        task_values=task_values
+    )
+
+
+
+@app.route("/api/insights/tasks")
+@require_login
+def api_task_insights():
+    user = current_user()
+
+    # Only admin can access this insight
+    if user["role"] != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    totals = query_one("SELECT COUNT(*) AS total_tasks FROM tasks")
+
+    grouped = query_all("""
+        SELECT status, COUNT(*) AS count
+        FROM tasks
+        GROUP BY status
+    """)
+
+    return jsonify({
+        "total_tasks": totals["total_tasks"],
+        "grouped": grouped
+    })
+        
 
 
 
