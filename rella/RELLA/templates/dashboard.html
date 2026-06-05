@@ -141,12 +141,7 @@ body.dark-mode #darkModeToggle {
             </div>
         </div>
 
-        <div class="card-box">
-            <div class="card-title">Clients Growth</div>
-            <div class="chart-container">
-                <canvas id="clientsChart"></canvas>
-            </div>
-        </div>
+        
 
         <!-- LAY-BUY CHART -->
         <div class="card-box">
@@ -165,6 +160,13 @@ body.dark-mode #darkModeToggle {
         </div>
 
     </div>
+	
+	<div class="card-box">
+	            <div class="card-title">Clients Growth</div>
+	            <div class="chart-container">
+	                <canvas id="clientsChart"></canvas>
+	            </div>
+	        </div>
 
     {% endif %}
 
@@ -261,27 +263,7 @@ new Chart(document.getElementById('productsChart'), {
     }
 });
 
-new Chart(document.getElementById('clientsChart'), {
-    type: 'line',
-    data: {
-        labels: {{ clients_labels | safe }},
-        datasets: [{
-            label: 'New Clients',
-            data: {{ clients_data | safe }},
-            borderColor: '#d4af37',
-            fill: false
-        }]
-    },
-    options: {
-        animation: chartAnimation,
-        tension: 0.4,
-        scales: {
-            x: { ticks: { color: chartTextColor() } },
-            y: { ticks: { color: chartTextColor() } }
-        },
-        plugins: { legend: { labels: { color: chartTextColor() } } }
-    }
-});
+
 
 new Chart(document.getElementById('recordsChart'), {
     type: 'line',
@@ -340,28 +322,6 @@ new Chart(document.getElementById('financesChart'), {
     }
 });
 
-/* LAY-BUY CHART */
-new Chart(document.getElementById('laybuyChart'), {
-    type: 'pie',
-    data: {
-        labels: ['Total Expected', 'Total Paid', 'Outstanding'],
-        datasets: [{
-            data: [
-                {{ laybuy_data.total_expected }},
-                {{ laybuy_data.total_paid }},
-                {{ laybuy_data.total_outstanding }}
-            ],
-            backgroundColor: ['#d4af37', '#444', '#b8860b']
-        }]
-    },
-    options: {
-        animation: chartAnimation,
-        plugins: {
-            legend: { labels: { color: chartTextColor() } }
-        }
-    }
-});
-
 /* TASK STATUS CHART */
 new Chart(document.getElementById('taskInsightsChart'), {
     type: 'bar',
@@ -384,6 +344,52 @@ new Chart(document.getElementById('taskInsightsChart'), {
         }
     }
 });
+
+/* LAY-BUY CHART */
+new Chart(document.getElementById('laybuyChart'), {
+    type: 'pie',
+    data: {
+        labels: ['Total Expected', 'Total Paid', 'Outstanding'],
+        datasets: [{
+            data: [
+                {{ laybuy_data.total_expected }},
+                {{ laybuy_data.total_paid }},
+                {{ laybuy_data.total_outstanding }}
+            ],
+            backgroundColor: ['#d4af37', '#444', '#b8860b']
+        }]
+    },
+    options: {
+        animation: chartAnimation,
+        plugins: {
+            legend: { labels: { color: chartTextColor() } }
+        }
+    }
+});
+
+new Chart(document.getElementById('clientsChart'), {
+    type: 'line',
+    data: {
+        labels: {{ clients_labels | safe }},
+        datasets: [{
+            label: 'New Clients',
+            data: {{ clients_data | safe }},
+            borderColor: '#d4af37',
+            fill: false
+        }]
+    },
+    options: {
+        animation: chartAnimation,
+        tension: 0.4,
+        scales: {
+            x: { ticks: { color: chartTextColor() } },
+            y: { ticks: { color: chartTextColor() } }
+        },
+        plugins: { legend: { labels: { color: chartTextColor() } } }
+    }
+});
+
+
 
 {% endif %}
 </script>

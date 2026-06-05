@@ -671,13 +671,26 @@ def dashboard():
     # ADMIN DASHBOARD
     # ============================================================
     else:
-        # PRODUCTS
-        cursor.execute("SELECT name, price FROM products")
-        rows = cursor.fetchall() or []
-        products_labels = [r["name"] for r in rows] or ["No products"]
-        products_data = [float(r["price"] or 0) for r in rows] or [0]
 
+        # ============================================================
+        # PRODUCTS — FIXED (SHOW STOCK LEVELS, NOT PRICES)
+        # ============================================================
+        cursor.execute("""
+            SELECT 
+                p.name AS product_name,
+                COALESCE(SUM(ss.quantity), 0) AS total_stock
+            FROM products p
+            LEFT JOIN store_stock ss ON ss.product_id = p.id
+            GROUP BY p.id, p.name
+            ORDER BY p.name ASC
+        """)
+        rows = cursor.fetchall() or []
+        products_labels = [r["product_name"] for r in rows] or ["No products"]
+        products_data = [float(r["total_stock"] or 0) for r in rows] or [0.01]
+
+        # ============================================================
         # CLIENTS
+        # ============================================================
         cursor.execute("""
             SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS total
             FROM clients
@@ -689,7 +702,9 @@ def dashboard():
         clients_labels = [r["month"] for r in rows] or ["No data"]
         clients_data = [r["total"] for r in rows] or [0]
 
-        # SALES RECORDS
+        # ============================================================
+        # SALES RECORDS (LAST 7 DAYS)
+        # ============================================================
         cursor.execute("""
             SELECT DATE(created_at) AS day, SUM(total) AS total
             FROM sales
@@ -710,7 +725,9 @@ def dashboard():
             records_labels.append(day_str)
             records_data.append(sales_map.get(day_str, 0))
 
+        # ============================================================
         # STORES STOCK LEVELS
+        # ============================================================
         cursor.execute("""
             SELECT s.name AS store_name, SUM(ss.quantity) AS total_stock
             FROM store_stock ss
@@ -721,7 +738,9 @@ def dashboard():
         stores_labels = [r["store_name"] for r in rows] or ["No Stores"]
         stores_data = [float(r["total_stock"] or 0) for r in rows] or [0.01]
 
+        # ============================================================
         # FINANCES SUMMARY
+        # ============================================================
         cursor.execute("""
             SELECT 
                 (SELECT COALESCE(SUM(amount),0) FROM external_entries WHERE entry_type='income') AS income,
@@ -729,12 +748,20 @@ def dashboard():
                 (SELECT COALESCE(SUM(cost),0) FROM stock_in) AS stock_cost
         """)
         row = cursor.fetchone() or {}
+
         income = float(row.get("income", 0))
         expenses = float(row.get("expenses", 0))
         stock_cost = float(row.get("stock_cost", 0))
-        finances_data = [income or 0.01, expenses or 0.01, stock_cost or 0.01]
 
-        # TASK INSIGHTS (with COALESCE)
+        finances_data = [
+            income or 0.01,
+            expenses or 0.01,
+            stock_cost or 0.01
+        ]
+
+        # ============================================================
+        # TASK INSIGHTS (COALESCE FIX)
+        # ============================================================
         cursor.execute("""
             SELECT COALESCE(status, 'unspecified') AS status, COUNT(*) AS count
             FROM tasks
@@ -744,7 +771,9 @@ def dashboard():
         task_labels = [r["status"] for r in rows] or ["No Data"]
         task_values = [r["count"] for r in rows] or [0]
 
+        # ============================================================
         # LAY‑BUY INSIGHTS
+        # ============================================================
         cursor.execute("""
             SELECT 
                 COALESCE(SUM(total_amount), 0) AS total_expected,
@@ -752,7 +781,11 @@ def dashboard():
                 COALESCE(SUM(total_amount - paid_amount), 0) AS total_outstanding
             FROM client_laybuys
         """)
-        laybuy_data = cursor.fetchone() or {"total_expected": 0, "total_paid": 0, "total_outstanding": 0}
+        laybuy_data = cursor.fetchone() or {
+            "total_expected": 0,
+            "total_paid": 0,
+            "total_outstanding": 0
+        }
 
         return render_template(
             "dashboard.html",
@@ -770,6 +803,7 @@ def dashboard():
             task_labels=task_labels,
             task_values=task_values
         )
+
 
         
 @app.route("/api/insights/laybuys")
