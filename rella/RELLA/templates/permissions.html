@@ -150,6 +150,75 @@
 <div class="card">
   <h3>Bulk Permission Assignment</h3>
 
+  <style>
+    /* Make checkboxes look like radio buttons */
+    .radio-style {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border: 2px solid #555;
+        border-radius: 50%;
+        display: inline-block;
+        position: relative;
+        cursor: pointer;
+        margin-right: 8px;
+    }
+
+    .radio-style:checked {
+        border-color: #d4af37;
+    }
+
+    .radio-style:checked::after {
+        content: "";
+        width: 10px;
+        height: 10px;
+        background: #d4af37;
+        border-radius: 50%;
+        position: absolute;
+        top: 2px;
+        left: 2px;
+    }
+
+    /* Green button */
+    .btn-green {
+        background: #28a745;
+        color: white;
+        padding: 10px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .btn-green:hover {
+        background: #218838;
+    }
+
+    /* Red button */
+    .btn-red {
+        background: #b30000;
+        color: white;
+        padding: 10px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .btn-red:hover {
+        background: #8a0000;
+    }
+
+    /* Permission list layout */
+    .perm-list label {
+        display: flex;
+        align-items: center;
+        margin-bottom: 6px;
+        cursor: pointer;
+    }
+  </style>
+
   <!-- BULK GRANT -->
   <form method="post" style="display:flex; flex-direction:column; gap:12px;">
     <input type="hidden" name="action" value="bulk_grant">
@@ -162,13 +231,16 @@
     </select>
 
     <label><strong>Select Permissions:</strong></label>
-    <select name="perm_codes" multiple size="6" required>
+    <div class="perm-list">
       {% for p in perms %}
-      <option value="{{ p.code }}">{{ p.code }}</option>
+      <label>
+        <input type="checkbox" class="radio-style" name="perm_codes" value="{{ p.code }}">
+        {{ p.code }}
+      </label>
       {% endfor %}
-    </select>
+    </div>
 
-    <button type="submit" style="margin-top:10px;">Grant Selected Permissions</button>
+    <button type="submit" class="btn-green">Grant Selected Permissions</button>
   </form>
 
   <hr>
@@ -185,13 +257,16 @@
     </select>
 
     <label><strong>Select Permissions to Remove:</strong></label>
-    <select name="perm_codes" multiple size="6" required>
+    <div class="perm-list">
       {% for p in perms %}
-      <option value="{{ p.code }}">{{ p.code }}</option>
+      <label>
+        <input type="checkbox" class="radio-style" name="perm_codes" value="{{ p.code }}">
+        {{ p.code }}
+      </label>
       {% endfor %}
-    </select>
+    </div>
 
-    <button type="submit" style="margin-top:10px; background:#b30000;">Remove Selected Permissions</button>
+    <button type="submit" class="btn-red">Remove Selected Permissions</button>
   </form>
 </div>
 

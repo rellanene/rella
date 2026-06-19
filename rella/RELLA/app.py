@@ -495,6 +495,100 @@ def invoice_view(sale_id):
 
     return render_template("invoice.html", sale=sale, items=items, user=user)
 
+@app.route("/invoice_whatsapp/<int:sale_id>")
+def invoice_whatsapp(sale_id):
+    pdf_path = generate_invoice_pdf(sale_id)
+    phone = get_customer_phone(sale_id)
+
+    if not phone:
+        return "This customer has no phone number saved."
+
+    os.system(f'start whatsapp://send?phone={phone}')
+
+    return redirect(f"/invoice/{sale_id}")
+
+
+@app.route("/invoice_email/<int:sale_id>")
+def invoice_email(sale_id):
+    # Simply open Classic Outlook — no attachment
+    os.system('start "" outlook.exe')
+    return redirect(f"/invoice/{sale_id}")
+
+
+def get_customer_email(sale_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT c.email
+        FROM sales s
+        JOIN clients c ON c.id = s.client_id
+        WHERE s.id = %s
+    """, (sale_id,))
+
+    row = cursor.fetchone()
+    return row["email"] if row and row["email"] else None
+
+
+def generate_invoice_pdf(sale_id):
+    from flask import render_template
+    import pdfkit
+    import os
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM sales WHERE id=%s", (sale_id,))
+    sale = cursor.fetchone()
+
+    cursor.execute("""
+        SELECT 
+            p.name AS product_name,
+            si.quantity AS qty,
+            si.unit_price AS price,
+            si.total_price AS total
+        FROM sale_items si
+        JOIN products p ON p.id = si.product_id
+        WHERE si.sale_id = %s
+    """, (sale_id,))
+    items = cursor.fetchall()
+
+    html = render_template("invoice.html", sale=sale, items=items)
+    html = html.replace('/static/', 'C:/Users/rella/git/repository8/rella/RELLA/static/')
+
+    output_path = f"generated_invoices/invoice_{sale_id}.pdf"
+    os.makedirs("generated_invoices", exist_ok=True)
+
+    WKHTML_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+    config = pdfkit.configuration(wkhtmltopdf=WKHTML_PATH)
+
+    options = {
+        "enable-local-file-access": None,
+        "quiet": "",
+        "load-error-handling": "ignore",
+        "load-media-error-handling": "ignore"
+    }
+
+    pdfkit.from_string(html, output_path, configuration=config, options=options)
+
+    return output_path
+
+def get_customer_phone(sale_id):
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT c.phone
+        FROM sales s
+        JOIN clients c ON c.id = s.client_id
+        WHERE s.id = %s
+    """, (sale_id,))
+
+    row = cursor.fetchone()
+    return row["phone"] if row and row["phone"] else None
+
+
+
 
 
 @app.route('/invoice/<int:sale_id>/pdf')

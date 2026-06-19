@@ -6,6 +6,10 @@
 <div class="invoice-actions">
     <button onclick="window.print()" class="btn-print">Print</button>
     <button onclick="saveInvoice()" class="btn-save">Save</button>
+
+    <!-- NEW BUTTONS -->
+    <button onclick="sendWhatsapp({{ sale.id }})" class="btn-whatsapp">WhatsApp</button>
+    <button onclick="sendEmail({{ sale.id }})" class="btn-email">Email</button>
 </div>
 
 <div class="invoice-container">
@@ -64,7 +68,7 @@
     <!-- FOOTER -->
     <div class="invoice-footer">
         <p>Thank you for your business</p>
-        <p class="brand">RELLA</p>
+        <p class="brand"></p>
     </div>
 
 </div>
@@ -93,6 +97,35 @@
 }
 
 .btn-print:hover, .btn-save:hover {
+    opacity: 0.85;
+}
+
+/* NEW BUTTONS */
+.btn-whatsapp {
+    background: #25D366;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-whatsapp:hover {
+    opacity: 0.85;
+}
+
+.btn-email {
+    background: #0078D4;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-email:hover {
     opacity: 0.85;
 }
 
@@ -230,6 +263,14 @@
 <script>
 function saveInvoice() {
     window.print(); // Browser will allow "Save as PDF"
+}
+
+function sendWhatsapp(saleId) {
+    window.location.href = "/invoice_whatsapp/" + saleId;
+}
+
+function sendEmail(saleId) {
+    window.location.href = "/invoice_email/" + saleId;
 }
 </script>
 
