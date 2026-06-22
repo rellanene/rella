@@ -4491,17 +4491,25 @@ def admin_leave_category_create():
     return redirect(url_for("human"))
 
 
+from mysql.connector.errors import IntegrityError
+
 @app.route("/admin/leave/category/delete/<int:category_id>", methods=["POST"])
 @login_required
 def admin_leave_category_delete(category_id):
     db = get_db()
     cursor = db.cursor()
 
-    cursor.execute("DELETE FROM leave_categories WHERE id=%s", (category_id,))
-    db.commit()
+    try:
+        cursor.execute("DELETE FROM leave_categories WHERE id=%s", (category_id,))
+        db.commit()
+        flash("Leave category deleted successfully.", "success")
 
-    flash("Leave category deleted successfully.", "success")
+    except IntegrityError:
+        # Category is still referenced in leave_balances
+        flash("Cannot delete this leave category because it is still in use.", "error")
+
     return redirect(url_for("human", tab="leave_categories"))
+
 
 
 
