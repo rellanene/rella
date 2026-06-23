@@ -6465,161 +6465,317 @@ def rellabot_query():
     options = []
     last_topic = session.get("last_topic")
 
+    # Load permissions into session if missing
+    if "permissions" not in session:
+        perms = query_all("""
+            SELECT p.code
+            FROM user_permissions up
+            JOIN permissions p ON p.id = up.permission_id
+            WHERE up.user_id = %s
+        """, (session["user_id"],))
+        session["permissions"] = [p["code"].lower() for p in perms]
+        print("Loaded permissions:", session["permissions"])
+
+    def has_permission(code):
+        return code.lower() in session.get("permissions", [])
+
     # -------------------------
     # 1. GREETINGS / MAIN MENU
     # -------------------------
     if any(word in user_message for word in ["hi", "hello", "hey", "main menu", "back to main menu"]):
         reply = "Main Menu — What would you like to access?"
-        options = ["Sales", "Products", "Clients", "POS"]
+        options = [
+            "Sales", "Products", "Clients", "Stores",
+            "Stock In", "Transfers", "Movements",
+            "Tasks", "Lay-buys", "Credits"
+        ]
         session["last_topic"] = "main_menu"
 
     # -------------------------
     # 2. SALES
     # -------------------------
-    elif "sales" in user_message and last_topic != "sales_recent":
-        reply = "Sales are tracked under the Finances module. What would you like to view?"
-        options = ["Today's Summary", "Recent Transactions", "Back to Main Menu"]
-        session["last_topic"] = "sales"
+    elif "sales" in user_message:
+        if not has_permission("view_sales"):
+            reply = "You don't have permission to view sales information."
+        else:
+            reply = "Sales module accessed. What would you like to view?"
+            options = ["Today's Summary", "Recent Transactions", "Back to Main Menu"]
+            session["last_topic"] = "sales"
 
     elif "today" in user_message and last_topic == "sales":
-        result = bot_safe_query(
-            "sales",
-            """
-            SELECT 
-                COUNT(id) AS total_invoices,
-                SUM(subtotal) AS total_subtotal,
-                SUM(vat) AS total_vat,
-                SUM(total) AS total_sales
-            FROM sales
-            WHERE DATE(created_at) = CURDATE()
-            """
-        )
-        if isinstance(result, str):
-            reply = result
+        if not has_permission("view_sales"):
+            reply = "You don't have permission to view sales information."
         else:
-            summary = result[0]
-            reply = (
-                f"Today's Sales Summary:<br>"
-                f"Invoices: {summary['total_invoices']}<br>"
-                f"Subtotal: R{summary['total_subtotal']:.2f}<br>"
-                f"VAT: R{summary['total_vat']:.2f}<br>"
-                f"Total Sales: R{summary['total_sales']:.2f}"
+            result = bot_safe_query(
+                "sales",
+                """
+                SELECT COUNT(id) AS total_invoices,
+                       SUM(subtotal) AS total_subtotal,
+                       SUM(vat) AS total_vat,
+                       SUM(total) AS total_sales
+                FROM sales
+                WHERE DATE(created_at) = CURDATE()
+                """
             )
-        options = ["Recent Transactions", "Back to Sales", "Back to Main Menu"]
-        session["last_topic"] = "sales_today"
+            if isinstance(result, str):
+                reply = result
+            else:
+                s = result[0]
+                reply = (
+                    f"Today's Sales Summary:<br>"
+                    f"Invoices: {s['total_invoices']}<br>"
+                    f"Subtotal: R{s['total_subtotal']:.2f}<br>"
+                    f"VAT: R{s['total_vat']:.2f}<br>"
+                    f"Total Sales: R{s['total_sales']:.2f}"
+                )
+            options = ["Recent Transactions", "Back to Main Menu"]
+            session["last_topic"] = "sales_today"
 
     elif "recent" in user_message and last_topic == "sales":
-        result = bot_safe_query(
-            "sales",
-            """
-            SELECT invoice_no, subtotal, vat, total, created_at
-            FROM sales
-            ORDER BY created_at DESC
-            LIMIT 10
-            """
-        )
-        if isinstance(result, str):
-            reply = result
+        if not has_permission("view_sales"):
+            reply = "You don't have permission to view sales information."
         else:
-            reply = "<br>".join([
-                f"Invoice {r['invoice_no']} — Total: R{r['total']:.2f} "
-                f"(VAT: R{r['vat']:.2f}) — {r['created_at']}"
-                for r in result
-            ])
-        options = ["Today's Summary", "Back to Sales", "Back to Main Menu"]
-        session["last_topic"] = "sales_recent"
+            result = bot_safe_query(
+                "sales",
+                """
+                SELECT invoice_no, total, vat, created_at
+                FROM sales
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([
+                    f"Invoice {r['invoice_no']} — Total: R{r['total']:.2f} (VAT: R{r['vat']:.2f}) — {r['created_at']}"
+                    for r in result
+                ])
+            options = ["Today's Summary", "Back to Main Menu"]
+            session["last_topic"] = "sales_recent"
 
     # -------------------------
     # 3. PRODUCTS
     # -------------------------
-    elif ("product" in user_message or "products" in user_message) and last_topic not in ["products_list", "products_search"]:
-        reply = "Products module accessed. What would you like to do?"
-        options = ["List Products", "Search Product by ID", "Back to Main Menu"]
-        session["last_topic"] = "products"
-
-    elif ("list" in user_message or "list products" in user_message) and last_topic in ["products", "main_menu"]:
-        result = bot_safe_query(
-            "products",
-            "SELECT id, name, price FROM products LIMIT 10"
-        )
-        if isinstance(result, str):
-            reply = result
+    elif "product" in user_message or "products" in user_message:
+        if not has_permission("view_products"):
+            reply = "You don't have permission to view product information."
         else:
-            reply = "<br>".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
-        options = ["Search Product by ID", "Back to Main Menu"]
-        session["last_topic"] = "products_list"
+            reply = "Products module accessed. What would you like to do?"
+            options = ["List Products", "Search Product by ID", "Back to Main Menu"]
+            session["last_topic"] = "products"
+
+    elif "list" in user_message and last_topic == "products":
+        if not has_permission("view_products"):
+            reply = "You don't have permission to view product information."
+        else:
+            result = bot_safe_query("products", "SELECT id, name, price FROM products LIMIT 10")
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
+            options = ["Search Product by ID", "Back to Main Menu"]
+            session["last_topic"] = "products_list"
 
     # -------------------------
     # 4. CLIENTS
     # -------------------------
-    elif ("client" in user_message or "clients" in user_message) and last_topic not in ["clients_list", "clients_search"]:
-        reply = "Clients module accessed. What would you like to do?"
-        options = ["List Clients", "Search Client by ID", "Back to Main Menu"]
-        session["last_topic"] = "clients"
-
-    elif ("list" in user_message or "list clients" in user_message) and last_topic in ["clients", "main_menu"]:
-        result = bot_safe_query(
-            "clients",
-            "SELECT id, name, phone FROM clients LIMIT 10"
-        )
-        if isinstance(result, str):
-            reply = result
+    elif "client" in user_message or "clients" in user_message:
+        if not has_permission("view_clients"):
+            reply = "You don't have permission to view client information."
         else:
-            reply = "<br>".join([f"{r['id']}. {r['name']} — {r['phone']}" for r in result])
-        options = ["Search Client by ID", "Back to Main Menu"]
-        session["last_topic"] = "clients_list"
+            reply = "Clients module accessed. What would you like to do?"
+            options = ["List Clients", "Search Client by ID", "Back to Main Menu"]
+            session["last_topic"] = "clients"
 
-    elif "id" in user_message and last_topic == "clients":
-        import re
-        match = re.search(r"id\s*(\d+)", user_message)
-        if match:
-            cid = match.group(1)
+    elif "list" in user_message and last_topic == "clients":
+        if not has_permission("view_clients"):
+            reply = "You don't have permission to view client information."
+        else:
+            result = bot_safe_query("clients", "SELECT id, name, phone FROM clients LIMIT 10")
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([f"{r['id']}. {r['name']} — {r['phone']}" for r in result])
+            options = ["Search Client by ID", "Back to Main Menu"]
+            session["last_topic"] = "clients_list"
+
+    # -------------------------
+    # 5. STORES
+    # -------------------------
+    elif "store" in user_message or "stores" in user_message:
+        if not has_permission("view_stores"):
+            reply = "You don't have permission to view store information."
+        else:
+            result = bot_safe_query("stores", "SELECT COUNT(id) AS total_stores FROM stores")
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = f"You have {result[0]['total_stores']} store(s) registered."
+            options = ["Check Stock Levels", "Back to Main Menu"]
+            session["last_topic"] = "stores"
+
+    # -------------------------
+    # 5B. STOCK LEVELS (CORRECTED)
+    # -------------------------
+    elif (
+        ("stock" in user_message or "check stock" in user_message or "stock levels" in user_message)
+        and last_topic == "stores"
+    ):
+        if not has_permission("view_stock"):
+            reply = "You don't have permission to view stock information."
+        else:
             result = bot_safe_query(
-                "clients",
-                "SELECT id, name, phone, email FROM clients WHERE id=%s",
-                (cid,)
+                "stock",
+                """
+                SELECT p.name, ss.quantity, s.name AS store_name
+                FROM products p
+                JOIN store_stock ss ON ss.product_id = p.id
+                JOIN stores s ON s.id = ss.store_id
+                ORDER BY ss.quantity ASC
+                LIMIT 10
+                """
             )
-            reply = str(result)
-            options = ["List Clients", "Back to Main Menu"]
-            session["last_topic"] = "clients_search"
+
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([
+                    f"{r['store_name']}: {r['name']} — Qty: {r['quantity']}"
+                    for r in result
+                ])
+
+            options = ["Suggest Restock", "Back to Main Menu"]
+            session["last_topic"] = "stock_levels"
 
     # -------------------------
-    # 5. PAGE LINKS
+    # 5C. SUGGEST RESTOCK (CORRECTED)
     # -------------------------
-    elif "open products" in user_message:
-        reply = '<a href="/products">Open Products Page</a>'
-        options = ["Back to Main Menu"]
-        session["last_topic"] = "link_products"
+    elif "suggest" in user_message and last_topic == "stock_levels":
+        if not has_permission("view_stock"):
+            reply = "You don't have permission to view stock information."
+        else:
+            result = bot_safe_query(
+                "stock",
+                """
+                SELECT p.name, ss.quantity, s.name AS store_name
+                FROM products p
+                JOIN store_stock ss ON ss.product_id = p.id
+                JOIN stores s ON s.id = ss.store_id
+                WHERE ss.quantity < 5
+                ORDER BY ss.quantity ASC
+                LIMIT 10
+                """
+            )
 
-    elif "open clients" in user_message:
-        reply = '<a href="/clients">Open Clients Page</a>'
-        options = ["Back to Main Menu"]
-        session["last_topic"] = "link_clients"
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([
+                    f"{r['store_name']}: {r['name']} — Qty: {r['quantity']} (Low stock!)"
+                    for r in result
+                ])
 
-    elif "open sales" in user_message:
-        reply = '<a href="/sales">Open Sales Page</a>'
-        options = ["Back to Main Menu"]
-        session["last_topic"] = "link_sales"
+            options = ["Back to Main Menu"]
+            session["last_topic"] = "stock_suggestions"
+
+    # -------------------------
+    # 6. STOCK IN
+    # -------------------------
+    elif "stock in" in user_message or "received" in user_message:
+        if not has_permission("view_stock_in"):
+            reply = "You don't have permission to view stock-in information."
+        else:
+            result = bot_safe_query(
+                "stock_in",
+                """
+                SELECT 
+                    SUM(CASE WHEN type='receive' THEN 1 ELSE 0 END) AS received,
+                    SUM(CASE WHEN type='return' THEN 1 ELSE 0 END) AS returned,
+                    SUM(CASE WHEN type='adjust' THEN 1 ELSE 0 END) AS adjusted
+                FROM stock_in
+                WHERE DATE(created_at)=CURDATE()
+                """
+            )
+            if isinstance(result, str):
+                reply = result
+            else:
+                r = result[0]
+                reply = f"Today: Received {r['received']}, Returned {r['returned']}, Adjusted {r['adjusted']}."
+            options = ["Back to Main Menu"]
+            session["last_topic"] = "stock_in"
+
+    # -------------------------
+    # 7. TRANSFERS
+    # -------------------------
+    elif "transfer" in user_message:
+        if not has_permission("view_transfer"):
+            reply = "You don't have permission to view transfer information."
+        else:
+            result = bot_safe_query(
+                "transfers",
+                "SELECT COUNT(id) AS total_transfers FROM transfers WHERE DATE(created_at)=CURDATE()"
+            )
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = f"{result[0]['total_transfers']} transfer(s) took place today."
+            options = ["Back to Main Menu"]
+            session["last_topic"] = "transfer"
+
+    # -------------------------
+    # 8. MOVEMENTS
+    # -------------------------
+    elif "movement" in user_message or "movements" in user_message:
+        if not has_permission("view_movements"):
+            reply = "You don't have permission to view movement information."
+        else:
+            result = bot_safe_query(
+                "stock_movements",
+                """
+                SELECT 
+                    SUM(CASE WHEN type='transfer' THEN 1 ELSE 0 END) AS transfers,
+                    SUM(CASE WHEN type='sale' THEN 1 ELSE 0 END) AS sales,
+                    SUM(CASE WHEN type='stock_in' THEN 1 ELSE 0 END) AS stock_in,
+                    SUM(CASE WHEN type='remove' THEN 1 ELSE 0 END) AS removed,
+                    SUM(CASE WHEN type='adjustment' THEN 1 ELSE 0 END) AS adjusted
+                FROM stock_movements
+                WHERE DATE(created_at)=CURDATE()
+                """
+            )
+
+            if isinstance(result, str):
+                reply = result
+            else:
+                m = result[0]
+                reply = (
+                    f"Today's Movements:<br>"
+                    f"Transfers: {m['transfers']}<br>"
+                    f"Sales: {m['sales']}<br>"
+                    f"Stock In: {m['stock_in']}<br>"
+                    f"Removed: {m['removed']}<br>"
+                    f"Adjusted: {m['adjusted']}"
+                )
+
+            options = ["Back to Main Menu"]
+            session["last_topic"] = "movements"
 
     # -------------------------
     # DEFAULT FALLBACK
     # -------------------------
-    if not reply:
-        if last_topic == "sales":
-            reply = "You can ask for today's sales or recent transactions."
-            options = ["Today's Summary", "Recent Transactions", "Back to Main Menu"]
-        elif last_topic == "products":
-            reply = "You can ask me to list products or search by ID."
-            options = ["List Products", "Search Product by ID", "Back to Main Menu"]
-        elif last_topic == "clients":
-            reply = "You can ask me to list clients or search by ID."
-            options = ["List Clients", "Search Client by ID", "Back to Main Menu"]
-        else:
-            reply = "I'm not sure I understood that. Try selecting an option."
-            options = ["Sales", "Products", "Clients", "POS"]
+    if reply is None:
+        reply = "I'm not sure I understood that. Try selecting an option."
+        options = [
+            "Sales", "Products", "Clients", "Stores",
+            "Stock In", "Transfers", "Movements",
+            "Tasks", "Lay-buys", "Credits"
+        ]
 
     print("REPLY:", reply)
     return jsonify({"reply": reply, "options": options})
+
+
+
 
 
 
@@ -6630,6 +6786,7 @@ def bot_safe_query(section, sql, params=()):
     if not user_id:
         return "You are not logged in."
 
+    # Load permissions
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute("""
@@ -6644,10 +6801,12 @@ def bot_safe_query(section, sql, params=()):
 
     permissions = [r["code"].lower() for r in rows] if rows else []
 
-    # ✅ Allow flexible matching (e.g., 'view_products' matches 'products')
-    if not any(section.lower() in perm for perm in permissions):
+    # FIX: match "view_section"
+    required = f"view_{section.lower()}"
+    if required not in permissions:
         return "You do not have permission to access this information."
 
+    # Run query
     db = get_db()
     cursor = db.cursor(dictionary=True)
     cursor.execute(sql, params)
@@ -6656,6 +6815,7 @@ def bot_safe_query(section, sql, params=()):
     db.close()
 
     return result if result else "No results found."
+
 
 
 
