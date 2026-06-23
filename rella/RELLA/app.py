@@ -6462,6 +6462,7 @@ def rellabot_query():
     print("USER MESSAGE:", user_message)
 
     reply = None
+    options = []   # <--- NEW
     last_topic = session.get("last_topic")
 
     # -------------------------
@@ -6469,15 +6470,17 @@ def rellabot_query():
     # -------------------------
     if any(word in user_message for word in ["hi", "hello", "hey"]):
         reply = "Hello, I'm RELLAbot. What would you like to know?"
+        options = ["Sales", "Products", "Clients", "POS"]
         session["last_topic"] = "greeting"
 
     # -------------------------
     # 2. SALES
     # -------------------------
     elif "sales" in user_message:
-        reply = "Sales are tracked under the Finances module. Would you like today's summary or recent transactions?"
+        reply = "Sales are tracked under the Finances module. What would you like to view?"
+        options = ["Today's Summary", "Recent Transactions"]
         session["last_topic"] = "sales"
-    
+
     # -------------------------
     # TODAY'S SALES SUMMARY
     # -------------------------
@@ -6505,8 +6508,9 @@ def rellabot_query():
                 f"VAT: R{summary['total_vat']:.2f}<br>"
                 f"Total Sales: R{summary['total_sales']:.2f}"
             )
+        options = ["Recent Transactions", "Back to Sales"]
         session["last_topic"] = "sales_today"
-    
+
     # -------------------------
     # RECENT SALES TRANSACTIONS
     # -------------------------
@@ -6528,31 +6532,32 @@ def rellabot_query():
                 f"(VAT: R{r['vat']:.2f}) — {r['created_at']}"
                 for r in result
             ])
+        options = ["Today's Summary", "Back to Sales"]
         session["last_topic"] = "sales_recent"
-
-
 
     # -------------------------
     # 3. PRODUCTS
     # -------------------------
     elif "product" in user_message or "products" in user_message:
-        reply = "We have a range of products available. Would you like me to list the first few?"
+        reply = "Products module accessed. What would you like to do?"
+        options = ["List Products", "Search Product by ID"]
         session["last_topic"] = "products"
 
-    elif "yes" in user_message and last_topic == "products":
+    elif "list" in user_message and last_topic == "products":
         result = bot_safe_query(
             "products",
             "SELECT id, name, price FROM products LIMIT 10"
         )
-        reply = "\n".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
-
+        reply = "<br>".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
+        options = ["Search Product by ID", "Back to Products"]
         session["last_topic"] = "products_list"
 
     # -------------------------
     # 4. CLIENTS
     # -------------------------
     elif "client" in user_message or "clients" in user_message:
-        reply = "Clients are managed under the Clients module. Would you like to see a list or search by ID?"
+        reply = "Clients module accessed. What would you like to do?"
+        options = ["List Clients", "Search Client by ID"]
         session["last_topic"] = "clients"
 
     elif "list" in user_message and last_topic == "clients":
@@ -6560,8 +6565,8 @@ def rellabot_query():
             "clients",
             "SELECT id, name, phone FROM clients LIMIT 10"
         )
-        reply = "\n".join([f"{r['id']}. {r['name']} — {r['phone']}" for r in result])
-
+        reply = "<br>".join([f"{r['id']}. {r['name']} — {r['phone']}" for r in result])
+        options = ["Search Client by ID", "Back to Clients"]
         session["last_topic"] = "clients_list"
 
     elif "id" in user_message and last_topic == "clients":
@@ -6575,6 +6580,7 @@ def rellabot_query():
                 (cid,)
             )
             reply = str(result)
+            options = ["List Clients", "Back to Clients"]
             session["last_topic"] = "clients_search"
 
     # -------------------------
@@ -6582,14 +6588,17 @@ def rellabot_query():
     # -------------------------
     elif "open products" in user_message:
         reply = '<a href="/products">Open Products Page</a>'
+        options = ["Back"]
         session["last_topic"] = "link_products"
 
     elif "open clients" in user_message:
         reply = '<a href="/clients">Open Clients Page</a>'
+        options = ["Back"]
         session["last_topic"] = "link_clients"
 
     elif "open sales" in user_message:
         reply = '<a href="/sales">Open Sales Page</a>'
+        options = ["Back"]
         session["last_topic"] = "link_sales"
 
     # -------------------------
@@ -6598,15 +6607,20 @@ def rellabot_query():
     if not reply:
         if last_topic == "sales":
             reply = "You can ask for today's sales or recent transactions."
+            options = ["Today's Summary", "Recent Transactions"]
         elif last_topic == "products":
             reply = "You can ask me to list products or search by ID."
+            options = ["List Products", "Search Product by ID"]
         elif last_topic == "clients":
             reply = "You can ask me to list clients or search by ID."
+            options = ["List Clients", "Search Client by ID"]
         else:
-            reply = "I'm not sure I understood that. Try asking about products, clients, or sales."
+            reply = "I'm not sure I understood that. Try selecting an option."
+            options = ["Sales", "Products", "Clients"]
 
     print("REPLY:", reply)
-    return jsonify({"reply": reply})
+    return jsonify({"reply": reply, "options": options})
+
 
 
 
