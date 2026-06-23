@@ -43,6 +43,41 @@
   .toast.info    { border-color: #007bff; }
   .toast.warn    { border-color: #ffc107; }
   </style>
+  <style>
+  #rellabot-messages {
+      background: rgba(255,0,0,0.2) !important;
+  }
+  #rellabot-messages {
+      background-color: #0A1A2F;   /* deep navy background */
+      color: #f5f5f5;              /* light text for visibility */
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 14px;
+  }
+  
+  #rellabot-messages div {
+      border-bottom: 1px solid rgba(212,175,55,0.2);
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+  }
+
+  #rellabot-window {
+      background-color: #ffffff;   /* light chat window */
+      border: 2px solid #d4af37;
+      box-shadow: 0 0 12px rgba(212,175,55,0.4);
+  }
+
+  #rellabot-messages strong {
+      color: #d4af37;              /* gold sender names */
+  }
+
+  #rellabot-messages div {
+      margin-bottom: 6px;
+      line-height: 1.4;
+  }
+
+  </style>
+
 
 </head>
 <body>
@@ -84,9 +119,37 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+  
 
-  <div id="toast-container" class="toast-container"></div>
-  <script src="{{ url_for('static', filename='rella.js') }}"></script>
+
+  <!-- RELLAbot Floating Button -->
+  <div id="rellabot-button">
+      🤖
+  </div>
+
+  <!-- RELLAbot Chat Window -->
+  <div id="rellabot-window">
+      <div id="rellabot-header">
+          <span>RELLAbot</span>
+          <button id="rellabot-close">×</button>
+      </div>
+
+      <div id="rellabot-messages"></div>
+
+      <div id="rellabot-controls">
+          <button id="rellabot-continue">Continue Chat</button>
+          <button id="rellabot-new">New Chat</button>
+      </div>
+
+      <div id="rellabot-input-area">
+          <input id="rellabot-input" type="text" placeholder="Ask me anything…">
+          <button id="rellabot-send">Send</button>
+      </div>
+  </div>
+ 
+
+  
+  
   <script>
   window.RELLA = {
       toast: function (message, type = "info") {
@@ -119,18 +182,87 @@
   });
   </script>
   <script>
-  document.getElementById("yourFormID").addEventListener("submit", function(e) {
-      let invalid = false;
+  document.addEventListener("DOMContentLoaded", function() {
+      const form = document.getElementById("yourFormID");
+      if (!form) return; // prevents JS crash
 
-      this.querySelectorAll("input, select, textarea").forEach(el => {
-          if (el.hasAttribute("required") && !el.value.trim()) {
-              invalid = true;
+      form.addEventListener("submit", function(e) {
+          let invalid = false;
+
+          this.querySelectorAll("input, select, textarea").forEach(el => {
+              if (el.hasAttribute("required") && !el.value.trim()) {
+                  invalid = true;
+              }
+          });
+
+          if (invalid) {
+              e.preventDefault();
+              window.RELLA.toast("Please fill in all required fields", "error");
           }
       });
+  });
+  </script>
 
-      if (invalid) {
-          e.preventDefault();
-          RELL A.toast("Please fill in all required fields", "error");
+
+
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+      console.log("RELLAbot inline JS loaded");
+
+      let history = [];
+
+      const btn = document.getElementById("rellabot-button");
+      const win = document.getElementById("rellabot-window");
+      const closeBtn = document.getElementById("rellabot-close");
+      const newBtn = document.getElementById("rellabot-new");
+      const contBtn = document.getElementById("rellabot-continue");
+      const sendBtn = document.getElementById("rellabot-send");
+      const input = document.getElementById("rellabot-input");
+      const messages = document.getElementById("rellabot-messages");
+
+      btn.onclick = () => win.style.display = "flex";
+      closeBtn.onclick = () => win.style.display = "none";
+
+	  newBtn.addEventListener("click", function () {
+	      if (!win.style.display || win.style.display === "none") return;
+	      history = [];
+	      messages.innerHTML = "";
+	  });
+
+
+      contBtn.onclick = () => {
+          messages.innerHTML = history.join("");
+      };
+
+      sendBtn.onclick = sendMessage;
+      input.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
+
+	  function sendMessage() {
+	      const msg = input.value.trim();
+	      if (!msg) return;
+
+	      win.style.display = "flex";  // auto-open bot window
+
+	      append("You", msg);
+	      input.value = "";
+
+	      fetch("/rellabot/query", {
+	          method: "POST",
+	          headers: {"Content-Type": "application/json"},
+	          body: JSON.stringify({message: msg})
+	      })
+	      .then(r => r.json())
+	      .then(data => {
+	          append("RELLAbot", data.reply);
+	      });
+	  }
+
+
+      function append(sender, text) {
+          const html = `<div><strong>${sender}:</strong> ${text}</div>`;
+          messages.innerHTML += html;
+          history.push(html);
+          messages.scrollTop = messages.scrollHeight;
       }
   });
   </script>

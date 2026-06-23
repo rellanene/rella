@@ -6449,7 +6449,212 @@ def finances_upload():
 
 
 
-# --- Download financial file ---
+# ChatBot
+from flask import request, jsonify, session
+
+@app.route("/rellabot/query", methods=["POST"])
+@require_login
+def rellabot_query():
+    data = request.get_json()
+    user_message = data.get("message", "").lower().strip()
+
+    print("BOT ROUTE HIT")
+    print("USER MESSAGE:", user_message)
+
+    reply = None
+    last_topic = session.get("last_topic")
+
+    # -------------------------
+    # 1. GREETINGS
+    # -------------------------
+    if any(word in user_message for word in ["hi", "hello", "hey"]):
+        reply = "Hello, I'm RELLAbot. What would you like to know?"
+        session["last_topic"] = "greeting"
+
+    # -------------------------
+    # 2. SALES
+    # -------------------------
+    elif "sales" in user_message:
+        reply = "Sales are tracked under the Finances module. Would you like today's summary or recent transactions?"
+        session["last_topic"] = "sales"
+    
+    # -------------------------
+    # TODAY'S SALES SUMMARY
+    # -------------------------
+    elif "today" in user_message and last_topic == "sales":
+        result = bot_safe_query(
+            "sales",
+            """
+            SELECT 
+                COUNT(id) AS total_invoices,
+                SUM(subtotal) AS total_subtotal,
+                SUM(vat) AS total_vat,
+                SUM(total) AS total_sales
+            FROM sales
+            WHERE DATE(created_at) = CURDATE()
+            """
+        )
+        if isinstance(result, str):
+            reply = result
+        else:
+            summary = result[0]
+            reply = (
+                f"Today's Sales Summary:<br>"
+                f"Invoices: {summary['total_invoices']}<br>"
+                f"Subtotal: R{summary['total_subtotal']:.2f}<br>"
+                f"VAT: R{summary['total_vat']:.2f}<br>"
+                f"Total Sales: R{summary['total_sales']:.2f}"
+            )
+        session["last_topic"] = "sales_today"
+    
+    # -------------------------
+    # RECENT SALES TRANSACTIONS
+    # -------------------------
+    elif "recent" in user_message and last_topic == "sales":
+        result = bot_safe_query(
+            "sales",
+            """
+            SELECT invoice_no, subtotal, vat, total, created_at
+            FROM sales
+            ORDER BY created_at DESC
+            LIMIT 10
+            """
+        )
+        if isinstance(result, str):
+            reply = result
+        else:
+            reply = "<br>".join([
+                f"Invoice {r['invoice_no']} — Total: R{r['total']:.2f} "
+                f"(VAT: R{r['vat']:.2f}) — {r['created_at']}"
+                for r in result
+            ])
+        session["last_topic"] = "sales_recent"
+
+
+
+    # -------------------------
+    # 3. PRODUCTS
+    # -------------------------
+    elif "product" in user_message or "products" in user_message:
+        reply = "We have a range of products available. Would you like me to list the first few?"
+        session["last_topic"] = "products"
+
+    elif "yes" in user_message and last_topic == "products":
+        result = bot_safe_query(
+            "products",
+            "SELECT id, name, price FROM products LIMIT 10"
+        )
+        reply = "\n".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
+
+        session["last_topic"] = "products_list"
+
+    # -------------------------
+    # 4. CLIENTS
+    # -------------------------
+    elif "client" in user_message or "clients" in user_message:
+        reply = "Clients are managed under the Clients module. Would you like to see a list or search by ID?"
+        session["last_topic"] = "clients"
+
+    elif "list" in user_message and last_topic == "clients":
+        result = bot_safe_query(
+            "clients",
+            "SELECT id, name, phone FROM clients LIMIT 10"
+        )
+        reply = "\n".join([f"{r['id']}. {r['name']} — {r['phone']}" for r in result])
+
+        session["last_topic"] = "clients_list"
+
+    elif "id" in user_message and last_topic == "clients":
+        import re
+        match = re.search(r"id\s*(\d+)", user_message)
+        if match:
+            cid = match.group(1)
+            result = bot_safe_query(
+                "clients",
+                "SELECT id, name, phone, email FROM clients WHERE id=%s",
+                (cid,)
+            )
+            reply = str(result)
+            session["last_topic"] = "clients_search"
+
+    # -------------------------
+    # 5. PAGE LINKS
+    # -------------------------
+    elif "open products" in user_message:
+        reply = '<a href="/products">Open Products Page</a>'
+        session["last_topic"] = "link_products"
+
+    elif "open clients" in user_message:
+        reply = '<a href="/clients">Open Clients Page</a>'
+        session["last_topic"] = "link_clients"
+
+    elif "open sales" in user_message:
+        reply = '<a href="/sales">Open Sales Page</a>'
+        session["last_topic"] = "link_sales"
+
+    # -------------------------
+    # DEFAULT FALLBACK
+    # -------------------------
+    if not reply:
+        if last_topic == "sales":
+            reply = "You can ask for today's sales or recent transactions."
+        elif last_topic == "products":
+            reply = "You can ask me to list products or search by ID."
+        elif last_topic == "clients":
+            reply = "You can ask me to list clients or search by ID."
+        else:
+            reply = "I'm not sure I understood that. Try asking about products, clients, or sales."
+
+    print("REPLY:", reply)
+    return jsonify({"reply": reply})
+
+
+
+
+def bot_safe_query(section, sql, params=()):
+    user_id = session.get("user_id")
+    if not user_id:
+        return "You are not logged in."
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT p.code
+        FROM user_permissions up
+        JOIN permissions p ON up.permission_id = p.id
+        WHERE up.user_id = %s
+    """, (user_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    permissions = [r["code"].lower() for r in rows] if rows else []
+
+    # ✅ Allow flexible matching (e.g., 'view_products' matches 'products')
+    if not any(section.lower() in perm for perm in permissions):
+        return "You do not have permission to access this information."
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(sql, params)
+    result = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    return result if result else "No results found."
+
+
+
+
+def safe_query(user, section, sql, params=()):
+    if section not in user["permissions"]:
+        return "You do not have access to this data."
+
+    db = get_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(sql, params)
+    return cursor.fetchall()
+
 
 
 

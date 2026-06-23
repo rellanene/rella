@@ -1,3 +1,160 @@
+#rellabot-button {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background: #0A1A2F;
+    color: white;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 3px solid #d4af37;
+    z-index: 9999;
+}
+
+
+
+#rellabot-header {
+    background: #0A1A2F;
+    padding: 10px;
+    border-bottom: 2px solid #d4af37;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#rellabot-messages {
+    background-color: #f9f9f9;   /* light background */
+    color: #1a1a1a;              /* dark text for contrast */
+    padding: 10px;
+    overflow-y: auto;
+    font-size: 14px;
+}
+#rellabot-messages strong {
+    color: #d4af37;              /* gold sender names */
+}
+
+#rellabot-input-area {
+    display: flex;
+    border-top: 2px solid #d4af37;
+}
+
+#rellabot-input {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: #0A1A2F;
+    color: white;
+}
+
+#rellabot-send {
+    background: #d4af37;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+#rellabot-controls {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px;
+    border-bottom: 2px solid #d4af37;
+}
+
+#rellabot-controls button {
+    background: #d4af37;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+#rellabot-button {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background: #0A1A2F;
+    color: white;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 3px solid #d4af37;
+    z-index: 9999;
+}
+
+#rellabot-window {
+    position: fixed;
+    bottom: 100px;
+    right: 25px;
+    width: 350px;
+    height: 450px;
+    background: #0A1A2F;
+    border: 2px solid #d4af37;
+    border-radius: 10px;
+    display: none;
+    flex-direction: column;
+    z-index: 9999;
+}
+
+#rellabot-header {
+    background: #0A1A2F;
+    padding: 10px;
+    border-bottom: 2px solid #d4af37;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#rellabot-messages {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    color: white;
+}
+
+#rellabot-input-area {
+    display: flex;
+    border-top: 2px solid #d4af37;
+}
+
+#rellabot-input {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: #0A1A2F;
+    color: white;
+}
+
+#rellabot-send {
+    background: #d4af37;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+#rellabot-controls {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px;
+    border-bottom: 2px solid #d4af37;
+}
+
+#rellabot-controls button {
+    background: #d4af37;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
 /* ============================================================
    PRIORITY BADGES — Premium Tsogo Sun Theme
    ============================================================ */
