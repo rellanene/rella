@@ -4796,6 +4796,77 @@ def task_view(task_id):
                            users=users,
                            history=history,
                            user=user)
+    
+@app.post('/tasks/<int:task_id>/countdown/start')
+def countdown_start(task_id):
+    data = request.get_json()
+    minutes = data.get("minutes", 0)
+    seconds = minutes * 60
+
+    execute("""
+        UPDATE tasks
+        SET countdown_start = NOW(),
+            countdown_seconds = %s,
+            countdown_active = 1
+        WHERE id=%s
+    """, (seconds, task_id))
+
+    return "OK"
+
+@app.post('/tasks/<int:task_id>/countdown/pause')
+def countdown_pause(task_id):
+    # Get current countdown state
+    task = query_one("""
+        SELECT countdown_start, countdown_seconds
+        FROM tasks
+        WHERE id=%s
+    """, (task_id,))
+
+    if task["countdown_start"]:
+        start_time = task["countdown_start"]
+        now = datetime.now()
+        elapsed = int((now - start_time).total_seconds())
+        remaining = task["countdown_seconds"] - elapsed
+    else:
+        remaining = task["countdown_seconds"]
+
+    # Prevent negative values
+    if remaining < 0:
+        remaining = 0
+
+    execute("""
+        UPDATE tasks
+        SET countdown_seconds = %s,
+            countdown_start = NULL,
+            countdown_active = 0
+        WHERE id=%s
+    """, (remaining, task_id))
+
+    return "OK"
+
+
+@app.post('/tasks/<int:task_id>/countdown/resume')
+def countdown_resume(task_id):
+    execute("""
+        UPDATE tasks
+        SET countdown_active = 1,
+            countdown_start = NOW()
+        WHERE id=%s
+    """, (task_id,))
+    return "OK"
+
+
+
+@app.post('/tasks/<int:task_id>/countdown/extend')
+def countdown_extend(task_id):
+    execute("""
+        UPDATE tasks
+        SET countdown_seconds = countdown_seconds + 300
+        WHERE id=%s
+    """, (task_id,))
+    return "OK"
+
+    
 
 @app.route('/tasks/<int:task_id>/status', methods=['POST'])
 @require_login
@@ -5308,7 +5379,6 @@ def permissions_page():
 
         # DELETE USER (SAFE DELETE)
         elif action == 'delete_user':
-            # Check foreign key dependencies
             linked = query_one("""
                 SELECT COUNT(*) AS total
                 FROM salary_statements
@@ -5322,6 +5392,16 @@ def permissions_page():
                 execute("DELETE FROM users WHERE id=%s", (uid,))
                 log_action(user['id'], 'delete_user', f'Deleted user {uid}')
                 flash('User deleted', 'success')
+
+        # ============================
+        # UPDATE ROLE (NEW)
+        # ============================
+        elif action == 'update_role':
+            new_role = request.form.get('new_role')
+
+            execute("UPDATE users SET role=%s WHERE id=%s", (new_role, uid))
+            log_action(user['id'], 'update_role', f'Changed role for user {uid} to {new_role}')
+            flash('Role updated successfully', 'success')
 
         # GRANT PERMISSION (single)
         elif action == 'grant_perm':
@@ -5393,18 +5473,15 @@ def permissions_page():
     users = query_all("SELECT * FROM users ORDER BY username ASC")
     perms = query_all("SELECT * FROM permissions ORDER BY code ASC")
 
-    # Load all user-permission mappings
     user_perms = query_all("""
         SELECT user_id, permission_id
         FROM user_permissions
     """)
 
-    # Build perm_map = { user_id: {permission_id, ...}, ... }
     perm_map = {}
     for p in user_perms:
         perm_map.setdefault(p['user_id'], set()).add(p['permission_id'])
 
-    # Render page
     return render_template(
         'permissions.html',
         users=users,
@@ -5412,6 +5489,7 @@ def permissions_page():
         perm_map=perm_map,
         user=user
     )
+
 
     
 ROUTE_PERMISSIONS = {

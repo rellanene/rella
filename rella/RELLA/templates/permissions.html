@@ -33,31 +33,51 @@
         <td>{{ u.is_approved }}</td>
         <td>{{ u.is_active }}</td>
 
-        <td>
-          <form method="post" style="display:inline">
-            <input type="hidden" name="user_id" value="{{ u.id }}">
-            <input type="hidden" name="action" value="approve_user">
-            <button type="submit">Approve</button>
-          </form>
+		<td>
 
-          <form method="post" style="display:inline">
-            <input type="hidden" name="user_id" value="{{ u.id }}">
-            <input type="hidden" name="action" value="activate_user">
-            <button type="submit">Activate</button>
-          </form>
+		  <!-- Approve -->
+		  <form method="post" style="display:inline">
+		    <input type="hidden" name="user_id" value="{{ u.id }}">
+		    <input type="hidden" name="action" value="approve_user">
+		    <button type="submit">Approve</button>
+		  </form>
 
-          <form method="post" style="display:inline">
-            <input type="hidden" name="user_id" value="{{ u.id }}">
-            <input type="hidden" name="action" value="suspend_user">
-            <button type="submit">Suspend</button>
-          </form>
+		  <!-- Activate -->
+		  <form method="post" style="display:inline">
+		    <input type="hidden" name="user_id" value="{{ u.id }}">
+		    <input type="hidden" name="action" value="activate_user">
+		    <button type="submit">Activate</button>
+		  </form>
 
-          <form method="post" style="display:inline">
-            <input type="hidden" name="user_id" value="{{ u.id }}">
-            <input type="hidden" name="action" value="delete_user">
-            <button type="submit">Delete</button>
-          </form>
-        </td>
+		  <!-- Suspend -->
+		  <form method="post" style="display:inline">
+		    <input type="hidden" name="user_id" value="{{ u.id }}">
+		    <input type="hidden" name="action" value="suspend_user">
+		    <button type="submit">Suspend</button>
+		  </form>
+
+		  <!-- Delete -->
+		  <form method="post" style="display:inline">
+		    <input type="hidden" name="user_id" value="{{ u.id }}">
+		    <input type="hidden" name="action" value="delete_user">
+		    <button type="submit">Delete</button>
+		  </form>
+
+		  <!-- NEW: Update Role -->
+		  <form method="post" style="display:inline; margin-left:6px;">
+		    <input type="hidden" name="user_id" value="{{ u.id }}">
+		    <input type="hidden" name="action" value="update_role">
+
+		    <select name="new_role" style="padding:3px;">
+		      <option value="staff" {% if u.role == 'staff' %}selected{% endif %}>Staff</option>
+		      <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+		    </select>
+
+		    <button type="submit">Update Role</button>
+		  </form>
+
+		</td>
+
       </tr>
       {% endfor %}
     </tbody>

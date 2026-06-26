@@ -2,16 +2,65 @@
 {% block title %}Task {{ task.task_no }}{% endblock %}
 {% block content %}
 
-<h1>Task {{ task.task_no }}</h1>
+<!-- Task Header with Timers and Back Button -->
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
 
-<!-- Back to Task List Button (curved, matching theme) -->
-<div style="margin-bottom: 20px;">
+  <!-- Left side: Task + timers -->
+  <div style="display: flex; align-items: center; gap: 20px;">
+    <h1 style="margin: 0; font-weight: bold;">
+      Task {{ task.task_no }}
+    </h1>
+
+    <!-- Live Timer -->
+    <span id="liveTimer" style="font-size: 18px; color: #555; font-weight: 500;">
+      ⏱️ 00:00:00
+    </span>
+
+    <!-- Countdown Timer -->
+    <span id="countdownTimer" style="font-size: 18px; font-weight: bold; color: green;">
+      00:00:00
+    </span>
+
+    <!-- Countdown Status -->
+    <span id="countdownStatus" style="font-size: 14px; color: gray; font-weight: 600;">
+       Not Active
+    </span>
+  </div>
+
+  <!-- Back to Task List Button -->
   <a href="{{ url_for('tasks') }}" 
      class="btn-accent btn-small"
-     style="text-decoration:none; display:inline-block; border-radius: var(--radius);">
+     style="text-decoration:none; display:inline-block; border-radius: var(--radius); font-weight:bold; padding:6px 14px;">
      Back to Task List
   </a>
 </div>
+
+<!-- Countdown Timer Controls (Admin Only) -->
+{% if user and (user.is_admin or user.role == 'admin') %}
+<div class="card" style="padding: 15px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 6px;">
+  <h3 style="margin-top: 0; color: #333;">Countdown Timer Controls</h3>
+
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+
+    <input type="number" id="countdownMinutes" 
+           placeholder="Minutes" 
+           min="1"
+           style="width:100px; padding:5px; border:1px solid #ccc; border-radius:4px;" />
+
+    <button type="button" class="btn-primary" onclick="startCountdown()">Activate</button>
+    <button type="button" class="btn-accent" onclick="pauseCountdown()">Pause</button>
+    <button type="button" class="btn-primary" onclick="extendCountdown()">+5 min</button>
+
+    <!-- NEW Resume Button -->
+    <button type="button" class="btn-primary" onclick="resumeCountdown()">Resume</button>
+
+  </div>
+</div>
+{% endif %}
+
+
+
+
 
 <div class="card">
   <h3>{{ task.title }}</h3>
@@ -25,14 +74,15 @@
   <h3>Update Status</h3>
   <form method="post" action="{{ url_for('task_update_status', task_id=task.id) }}">
     <select name="status" required>
-      <option value="open">Open</option>
-      <option value="in_progress">In Progress</option>
-      <option value="completed">Completed</option>
-      <option value="archived">Archived</option>
+      <option value="open"        {% if task.status|lower == 'open' %}selected{% endif %}>Open</option>
+      <option value="in_progress" {% if task.status|lower in ['in_progress', 'in progress'] %}selected{% endif %}>In Progress</option>
+      <option value="completed"   {% if task.status|lower == 'completed' %}selected{% endif %}>Completed</option>
+      <option value="archived"    {% if task.status|lower == 'archived' %}selected{% endif %}>Archived</option>
     </select>
     <button class="btn-primary">Update</button>
   </form>
 </div>
+
 
 <!-- Transfer Task -->
 <div class="card">
@@ -58,12 +108,14 @@
   <ul>
     {% for c in comments %}
     <li>
-      <strong>{{ c.username }}</strong>: {{ c.comment }} <em>{{ c.created_at }}</em>
+      <strong>{{ c.username }}</strong>: {{ c.comment }}
+      <em style="color: green;">{{ c.created_at }}</em>
       <hr style="border: 0; border-top: 1px solid #ccc; margin: 6px 0;">
     </li>
     {% endfor %}
   </ul>
 </div>
+
 
 
 <!-- File Upload -->
@@ -94,5 +146,180 @@
     {% endfor %}
   </ul>
 </div>
+
+<script>
+// -----------------------------
+// LIVE TIMER (time since created)
+// -----------------------------
+const createdAt = new Date("{{ task.created_at }}");  
+function updateLiveTimer() {
+    const now = new Date();
+    let diff = Math.floor((now - createdAt) / 1000);
+
+    const days = Math.floor(diff / 86400);
+    const hours = Math.floor((diff % 86400) / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    const seconds = diff % 60;
+
+    const formatted = `${days > 0 ? days + 'd ' : ''}${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+    document.getElementById("liveTimer").innerText = formatted;
+}
+setInterval(updateLiveTimer, 1000);
+updateLiveTimer();
+
+
+// -----------------------------
+// COUNTDOWN TIMER (persistent)
+// -----------------------------
+let countdownSeconds = 0;
+let countdownActive = false;
+let countdownInterval = null;
+let initialCountdownSeconds = 0;
+
+// Values from backend
+const countdownStart = "{{ task.countdown_start }}";
+const countdownSecondsDB = Number("{{ task.countdown_seconds }}");
+const countdownActiveDB = Number("{{ task.countdown_active }}");
+
+function renderCountdown() {
+    const el = document.getElementById("countdownTimer");
+    const status = document.getElementById("countdownStatus");
+
+    let abs = Math.abs(countdownSeconds);
+    const days = Math.floor(abs / 86400);
+    const hours = Math.floor((abs % 86400) / 3600);
+    const minutes = Math.floor((abs % 3600) / 60);
+    const seconds = abs % 60;
+
+    const formatted = `${days > 0 ? days + 'd ' : ''}${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+    el.innerText = countdownSeconds < 0 ? `- ${formatted}` : formatted;
+
+    // Color logic
+    if (countdownSeconds > 0) {
+        const percent = countdownSeconds / initialCountdownSeconds;
+        el.style.color = percent > 0.25 ? "green" : "orange";
+    } else {
+        el.style.color = "red";
+    }
+
+    // Status indicator
+    status.innerText = countdownActive ? " Active" : " Paused";
+    status.style.color = countdownActive ? "green" : "gray";
+}
+
+
+// -----------------------------
+// RESTORE COUNTDOWN (fixed logic)
+// -----------------------------
+if (countdownSecondsDB > 0) {
+
+    initialCountdownSeconds = countdownSecondsDB;
+
+    if (countdownActiveDB === 1 && countdownStart) {
+        // Timer was ACTIVE → subtract elapsed time
+        const startTime = new Date(countdownStart);
+        const now = new Date();
+        const elapsed = Math.floor((now - startTime) / 1000);
+
+        countdownSeconds = countdownSecondsDB - elapsed;
+        countdownActive = true;
+
+        // Start ticking
+        countdownInterval = setInterval(() => {
+            countdownSeconds--;
+            renderCountdown();
+        }, 1000);
+
+    } else {
+        // Timer was PAUSED → DO NOT subtract elapsed time
+        countdownSeconds = countdownSecondsDB;
+        countdownActive = false;
+    }
+
+    renderCountdown();
+}
+
+
+// -----------------------------
+// ADMIN BUTTON ACTIONS
+// -----------------------------
+function startCountdown() {
+    const minutes = parseInt(document.getElementById("countdownMinutes").value);
+    if (!minutes) return;
+
+    fetch(`/tasks/{{ task.id }}/countdown/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minutes })
+    }).then(() => location.reload());
+}
+
+function pauseCountdown() {
+    fetch(`/tasks/{{ task.id }}/countdown/pause`, {
+        method: "POST"
+    }).then(() => location.reload());
+}
+
+function extendCountdown() {
+    fetch(`/tasks/{{ task.id }}/countdown/extend`, {
+        method: "POST"
+    }).then(() => location.reload());
+}
+
+function resumeCountdown() {
+    fetch(`/tasks/{{ task.id }}/countdown/resume`, {
+        method: "POST"
+    }).then(() => location.reload());
+}
+function startCountdown() {
+    const minutes = parseInt(document.getElementById("countdownMinutes").value);
+    if (!minutes) {
+        window.RELLA.toast("Please enter minutes first", "warning");
+        return;
+    }
+
+    fetch(`/tasks/{{ task.id }}/countdown/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minutes })
+    }).then(() => {
+        window.RELLA.toast("Countdown activated", "success");
+        setTimeout(() => location.reload(), 600);
+    });
+}
+
+function pauseCountdown() {
+    fetch(`/tasks/{{ task.id }}/countdown/pause`, {
+        method: "POST"
+    }).then(() => {
+        window.RELLA.toast("Countdown paused", "info");
+        setTimeout(() => location.reload(), 600);
+    });
+}
+
+function extendCountdown() {
+    fetch(`/tasks/{{ task.id }}/countdown/extend`, {
+        method: "POST"
+    }).then(() => {
+        window.RELLA.toast("Countdown extended by 5 minutes", "success");
+        setTimeout(() => location.reload(), 600);
+    });
+}
+
+function resumeCountdown() {
+    fetch(`/tasks/{{ task.id }}/countdown/resume`, {
+        method: "POST"
+    }).then(() => {
+        window.RELLA.toast("Countdown resumed", "success");
+        setTimeout(() => location.reload(), 600);
+    });
+}
+
+</script>
+
+
+
+
+
 
 {% endblock %}
