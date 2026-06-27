@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Edit Store{% endblock %}
+{% block content %}
+
+<h1>Edit Store</h1>
+
+<style>
+    .edit-card {
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        max-width: 400px;
+        margin-top: 20px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .edit-card input {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 15px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        font-size: 15px;
+    }
+
+    .btn-gold {
+        background-color: #d4af37;
+        color: black;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 15px;
+    }
+
+    .btn-gold:hover {
+        background-color: #b8952f;
+    }
+</style>
+
+<div class="edit-card">
+    <form method="post">
+        <input name="name" value="{{ store.name }}" required>
+        <button class="btn-gold">Save</button>
+    </form>
+</div>
+
+{% endblock %}

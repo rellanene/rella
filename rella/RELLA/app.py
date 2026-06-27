@@ -994,6 +994,171 @@ def api_task_insights():
         "grouped": grouped
     })
         
+@app.route('/task_report')
+@require_login
+def task_report():
+    user = current_user()
+
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    sql = """
+        SELECT 
+            t.*,
+            u.username AS owner_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to = u.id
+        WHERE 1=1
+    """
+
+    params = []
+
+    if start:
+        sql += " AND t.created_at >= %s"
+        params.append(start)
+
+    if end:
+        sql += " AND t.created_at <= %s"
+        params.append(end)
+
+    # ⭐ NEWEST FIRST
+    sql += " ORDER BY t.created_at DESC"
+
+    rows = query_all(sql, params)
+
+    return render_template('task_report.html', tasks=rows, user=user)
+
+
+@app.route('/export_task_report')
+@require_login
+def export_task_report():
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    # Detect available columns in tasks table
+    cols = query_all("SHOW COLUMNS FROM tasks")
+    colnames = [c["Field"] for c in cols]
+
+    has_duration = "duration" in colnames
+    has_countdown = "countdown" in colnames
+
+    # Build SELECT dynamically
+    select_fields = """
+        t.id,
+        u.username AS owner,
+        t.title,
+        t.priority,
+        t.status,
+        t.created_at
+    """
+
+    if has_duration:
+        select_fields += ", t.duration"
+
+    if has_countdown:
+        select_fields += ", t.countdown"
+
+    sql = f"""
+        SELECT {select_fields}
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to = u.id
+        WHERE 1=1
+    """
+
+    params = []
+
+    if start:
+        sql += " AND t.created_at >= %s"
+        params.append(start)
+
+    if end:
+        sql += " AND t.created_at <= %s"
+        params.append(end)
+
+    # NEWEST FIRST
+    sql += " ORDER BY t.created_at DESC"
+
+    rows = query_all(sql, params)
+
+    # Build CSV
+    import csv
+    from io import StringIO
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Header row
+    header = ["Task No", "Owner", "Title", "Priority", "Status", "Created At"]
+
+    if has_duration:
+        header.append("Duration")
+
+    if has_countdown:
+        header.append("Countdown")
+
+    writer.writerow(header)
+
+    # Data rows
+    for r in rows:
+        row = [
+            r["id"],
+            r["owner"],
+            r["title"],
+            r["priority"],
+            r["status"],
+            r["created_at"]
+        ]
+
+        if has_duration:
+            row.append(r.get("duration", ""))
+
+        if has_countdown:
+            row.append(r.get("countdown", ""))
+
+        writer.writerow(row)
+
+    # Timestamped filename
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=task_report_{timestamp}.csv"
+        }
+    )
+
+@app.route("/stores/<int:store_id>/edit", methods=["GET", "POST"])
+@require_login
+def edit_store(store_id):
+    user = current_user()
+
+    # ✅ Ensure admin flag is recognized (added exactly as requested)
+    user["is_admin"] = (
+        user.get("role") == "admin" or
+        user.get("user_type") == "admin" or
+        user.get("is_admin") in [1, True]
+    )
+
+    # Block non-admins
+    if not user["is_admin"]:
+        flash("You are not authorized to edit stores.", "danger")
+        return redirect(url_for("stores"))
+
+    # Load store
+    store = query_one("SELECT * FROM stores WHERE id=%s", (store_id,))
+
+    # Save changes
+    if request.method == "POST":
+        new_name = request.form["name"]
+        execute("UPDATE stores SET name=%s WHERE id=%s", (new_name, store_id))
+        flash("Store name updated successfully.", "success")
+        return redirect(url_for("stores"))
+
+    return render_template("edit_store.html", store=store, user=user)
+
+
+
 
 
 
@@ -3191,13 +3356,24 @@ def check_barcode():
 @require_login
 def stores():
     user = current_user()
+
+    # Ensure admin flag exists
+    # Adjust this line depending on your users table structure
+    user["is_admin"] = (
+        user.get("role") == "admin" or 
+        user.get("is_admin") == 1 or 
+        user.get("is_admin") is True
+    )
+
     if request.method == 'POST':
         name = request.form.get('name')
-        execute("INSERT INTO stores (name,created_by) VALUES (%s,%s)", (name,user['id']))
+        execute("INSERT INTO stores (name, created_by) VALUES (%s, %s)", (name, user['id']))
         flash('Store added', 'success')
         return redirect(url_for('stores'))
+
     rows = query_all("SELECT * FROM stores")
     return render_template('stores.html', stores=rows, user=user)
+
 
 # --- Stock in ---
 # --- Stock in ---

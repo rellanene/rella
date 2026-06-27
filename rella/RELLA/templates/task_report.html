@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Task Report{% endblock %}
+{% block content %}
+
+<h1>Task Report</h1>
+
+<form method="get" style="margin-bottom:20px; display:flex; gap:10px;">
+    <input type="date" name="start" value="{{ request.args.get('start','') }}">
+    <input type="date" name="end" value="{{ request.args.get('end','') }}">
+    <button class="btn-accent btn-small">Apply</button>
+
+    <button type="button" onclick="window.print()" class="btn-black btn-small">
+        Print PDF
+    </button>
+
+    <a href="{{ url_for('export_task_report', start=request.args.get('start'), end=request.args.get('end')) }}"
+       class="btn-gold btn-small">
+       Export CSV
+    </a>
+
+    <!-- ⭐ NEW BUTTON: Back to Tasks -->
+    <a href="{{ url_for('tasks') }}" 
+       class="btn-accent btn-small"
+       style="margin-left:auto; font-weight:700; border-radius:var(--radius);">
+       Back to Tasks
+    </a>
+</form>
+
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Task No</th>
+            <th>Owner</th>
+            <th>Title</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Created At</th>
+            <th>Duration</th>
+            <th>Countdown</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for t in tasks %}
+        <tr>
+            <td>{{ t.id }}</td>
+            <td>{{ t.owner_name }}</td>
+            <td>{{ t.title }}</td>
+            <td>{{ t.priority }}</td>
+            <td>{{ t.status }}</td>
+            <td>{{ t.created_at }}</td>
+
+            <td>
+                {{ t.duration or "-" }}
+            </td>
+
+            <td>
+                {{ t.countdown or "-" }}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<style>
+@media print {
+
+    /* Hide navbar */
+    nav.nav,
+    .nav,
+    .navbar {
+        display: none !important;
+    }
+
+    /* Hide all buttons */
+    button,
+    .btn-primary,
+    .btn-accent,
+    .btn-small,
+    .btn-black,
+    .btn-gold,
+    a.btn-accent,
+    a.btn-gold {
+        display: none !important;
+    }
+
+    /* Hide filters */
+    form[method="get"],
+    .filter-bar,
+    .search-form {
+        display: none !important;
+    }
+
+    /* Keep the heading visible */
+    h1 {
+        display: block !important;
+    }
+
+    /* Make report table full width for printing */
+    table.data-table {
+        width: 100% !important;
+        border: 1px solid #000;
+    }
+}
+</style>
+
+{% endblock %}

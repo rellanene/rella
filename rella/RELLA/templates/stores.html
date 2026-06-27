@@ -4,7 +4,6 @@
 <h1>Stores</h1>
 
 <style>
-    /* Gold/Black Theme Buttons */
     .btn-gold {
         background-color: #d4af37;
         color: black;
@@ -14,9 +13,7 @@
         cursor: pointer;
         font-weight: bold;
     }
-    .btn-gold:hover {
-        background-color: #b8952f;
-    }
+    .btn-gold:hover { background-color: #b8952f; }
 
     .btn-black {
         background-color: black;
@@ -27,9 +24,9 @@
         cursor: pointer;
         font-weight: bold;
     }
-    .btn-black:hover {
-        background-color: #222;
-    }
+    .btn-black:hover { background-color: #222; }
+
+    .btn-row { display: flex; gap: 6px; }
 </style>
 
 <form method="post" class="add-form">
@@ -41,12 +38,11 @@
   <thead>
     <tr>
       <th>Name</th>
-      <th>Created At</th>
-      <th>Created By</th>
-      <th>Open</th>
+      <th>Created At</th>
+      <th>Created By</th>
+      <th>Actions</th>
     </tr>
   </thead>
-
   <tbody>
     {% for s in stores %}
     <tr>
@@ -54,9 +50,12 @@
       <td>{{ s.created_at }}</td>
       <td>{{ s.created_by }}</td>
       <td>
-        <a href="{{ url_for('store_details', store_id=s.id) }}" class="btn-black">
-          Open
-        </a>
+        <div class="btn-row">
+          <a href="{{ url_for('store_details', store_id=s.id) }}" class="btn-black">Open</a>
+          {% if user.is_admin %}
+          <a href="{{ url_for('edit_store', store_id=s.id) }}" class="btn-gold">Edit</a>
+          {% endif %}
+        </div>
       </td>
     </tr>
     {% endfor %}
