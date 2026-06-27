@@ -6816,24 +6816,46 @@ def rellabot_query():
     # 3. PRODUCTS
     # -------------------------
     elif "product" in user_message or "products" in user_message:
+    
         if not has_permission("view_products"):
             reply = "You don't have permission to view product information."
+    
         else:
-            reply = "Products module accessed. What would you like to do?"
-            options = ["List Products", "Search Product by ID", "Back to Main Menu"]
-            session["last_topic"] = "products"
-
-    elif "list" in user_message and last_topic == "products":
-        if not has_permission("view_products"):
-            reply = "You don't have permission to view product information."
-        else:
-            result = bot_safe_query("products", "SELECT id, name, price FROM products LIMIT 10")
-            if isinstance(result, str):
-                reply = result
+    
+            # ⭐ DIRECT: "list products"
+            if "list" in user_message:
+                result = bot_safe_query("products", "SELECT id, name, price FROM products LIMIT 10")
+                if isinstance(result, str):
+                    reply = result
+                else:
+                    reply = "<br>".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
+                options = ["Search Product by ID", "Back to Main Menu"]
+                session["last_topic"] = "products_list"
+    
+            # ⭐ DIRECT: "search product by id"
+            elif "search" in user_message and "id" in user_message:
+                reply = "Please enter the product ID you want to search."
+                options = ["Back to Main Menu"]
+                session["last_topic"] = "product_search"
+    
+            # ⭐ DIRECT: "product 12"
+            elif user_message.replace("product", "").strip().isdigit():
+                pid = int(user_message.replace("product", "").strip())
+                result = bot_safe_query("products", f"SELECT * FROM products WHERE id={pid}")
+                if isinstance(result, str) or not result:
+                    reply = "No product found with that ID."
+                else:
+                    p = result[0]
+                    reply = f"{p['id']}. {p['name']} — R{p['price']:.2f}"
+                options = ["Search Product by ID", "Back to Main Menu"]
+                session["last_topic"] = "products"
+    
+            # ⭐ DEFAULT ENTRY
             else:
-                reply = "<br>".join([f"{r['id']}. {r['name']} — R{r['price']:.2f}" for r in result])
-            options = ["Search Product by ID", "Back to Main Menu"]
-            session["last_topic"] = "products_list"
+                reply = "Products module accessed. What would you like to do?"
+                options = ["List Products", "Search Product by ID", "Back to Main Menu"]
+                session["last_topic"] = "products"
+
 
     # -------------------------
     # 4. CLIENTS
