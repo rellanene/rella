@@ -424,15 +424,17 @@ def export_records_csv():
 def invoice_view(sale_id):
     user = current_user()
 
-    # Load sale header
+    # Load sale header + store name
     sale = query_one("""
         SELECT 
             s.*, 
             c.name AS client_name, 
-            u.username AS user_name
+            u.username AS user_name,
+            st.name AS store_name
         FROM sales s
         LEFT JOIN clients c ON s.client_id = c.id
         LEFT JOIN users u ON s.created_by = u.id
+        LEFT JOIN stores st ON s.store_id = st.id
         WHERE s.id=%s
     """, (sale_id,))
 
@@ -440,22 +442,15 @@ def invoice_view(sale_id):
     cols = query_all("SHOW COLUMNS FROM sale_items")
     colnames = [c["Field"] for c in cols]
 
-    # Detect sale_id column
     sale_id_col = next(c for c in colnames if "sale" in c.replace(" ", "").lower())
-
-    # Detect product_id column
     product_id_col = next(c for c in colnames if "product" in c.replace(" ", "").lower())
-
-    # Detect quantity column
     qty_col = next(c for c in colnames if "quantity" in c.replace(" ", "").lower())
 
-    # Detect unit price column
     unit_price_col = next(
         c for c in colnames 
         if "unit" in c.replace(" ", "").lower() and "price" in c.replace(" ", "").lower()
     )
 
-    # Detect total price column
     total_price_col = next(
         c for c in colnames 
         if "total" in c.replace(" ", "").lower() and "price" in c.replace(" ", "").lower()
@@ -474,7 +469,6 @@ def invoice_view(sale_id):
         price = float(it.get(unit_price_col) or 0)
         total = float(it.get(total_price_col) or 0)
 
-        # Fetch product name
         product = query_one("SELECT name FROM products WHERE id=%s", (pid,))
         product_name = product["name"] if product else "Unknown Product"
 
@@ -490,10 +484,10 @@ def invoice_view(sale_id):
             grouped[pid]["qty"] += qty
             grouped[pid]["total"] += total
 
-    # Convert dict to list
     items = list(grouped.values())
 
     return render_template("invoice.html", sale=sale, items=items, user=user)
+
 
 @app.route("/invoice_whatsapp/<int:sale_id>")
 def invoice_whatsapp(sale_id):
@@ -3688,11 +3682,21 @@ def movements():
             p.name AS product_name,
             u.username AS user_name,
             s.id AS invoice_id,
-            s.invoice_no
+            s.invoice_no,
+
+            -- Store names (corrected column names)
+            fs.name AS from_store,
+            ts.name AS to_store
+
         FROM movements m
         LEFT JOIN products p ON m.product_id = p.id
         LEFT JOIN users u ON m.created_by = u.id
         LEFT JOIN sales s ON m.invoice_id = s.id
+
+        -- FIX: use your real column names
+        LEFT JOIN stores fs ON m.from_store = fs.id
+        LEFT JOIN stores ts ON m.to_store = ts.id
+
         WHERE 1=1
     """
 
@@ -3710,12 +3714,12 @@ def movements():
         sql += " AND m.created_at <= %s"
         params.append(end)
 
-    # newest first
     sql += " ORDER BY m.id DESC"
 
     rows = query_all(sql, params)
 
     return render_template('movements.html', movements=rows, user=user)
+
 
 @app.post("/hr/overtime/create")
 @login_required

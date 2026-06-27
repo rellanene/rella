@@ -189,6 +189,14 @@
 	    transform: scale(1.05);
 	}
 
+	@media print {
+	    #rellabot-button,
+	    #rellabot-window,
+	    #toast-container {
+	        display: none !important;
+	        visibility: hidden !important;
+	    }
+	}
 
 
   </style>
@@ -206,7 +214,7 @@
       <a href="{{ url_for('pos') }}" class="nav-link {% if request.path.startswith('/pos') %}active{% endif %}">POS</a>
       <a href="{{ url_for('records') }}" class="nav-link {% if request.path.startswith('/records') %}active{% endif %}">Records</a>
       <a href="{{ url_for('stores') }}" class="nav-link {% if request.path.startswith('/stores') %}active{% endif %}">Stores</a>
-      <a href="{{ url_for('stock_in') }}" class="nav-link {% if request.path.startswith('/stock-in') %}active{% endif %}">Stock In</a>
+	  <a href="{{ url_for('stock_in') }}" class="nav-link {% if request.path.startswith('/stock_in') %}active{% endif %}">Stock In</a>
       <a href="{{ url_for('transfer') }}" class="nav-link {% if request.path.startswith('/transfer') %}active{% endif %}">Transfer</a>
       <a href="{{ url_for('movements') }}" class="nav-link {% if request.path.startswith('/movements') %}active{% endif %}">Movements</a>
       <a href="{{ url_for('human') }}" class="nav-link {% if request.path.startswith('/human') %}active{% endif %}">Human</a>
