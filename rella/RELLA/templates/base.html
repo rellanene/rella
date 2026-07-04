@@ -352,31 +352,38 @@
           messages.innerHTML = history.join("");
       };
 
-      sendBtn.onclick = () => sendMessage();
-      input.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
+	  sendBtn.onclick = () => sendMessage();
+	  input.onkeypress = e => { if (e.key === "Enter") sendMessage(); };
 
-      function sendMessage(message = null) {
-          const msg = message || input.value.trim();
-          if (!msg) return;
+	  function sendMessage(message = null) {
+	      const placeholderText = input.placeholder.trim();
+	      let msg = message || input.value.trim();
 
-          win.style.display = "flex";
-          append("You", msg);
-          input.value = "";
+	      // If user didn't type anything, use the placeholder text
+	      if (!msg) {
+	          msg = placeholderText;
+	      }
 
-          fetch("/rellabot/query", {
-              method: "POST",
-              headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({message: msg})
-          })
-          .then(r => r.json())
-          .then(data => {
-              append("RELLAbot", data.reply, data.options || []);
-          })
-          .catch(err => {
-              console.error("Error:", err);
-              append("RELLAbot", "Oops, something went wrong. Please try again.");
-          });
-      }
+	      win.style.display = "flex";
+	      append("You", msg);
+	      input.value = "";
+
+	      fetch("/rellabot/query", {
+	          method: "POST",
+	          headers: {"Content-Type": "application/json"},
+	          credentials: "include",
+	          body: JSON.stringify({message: msg})
+	      })
+	      .then(r => r.json())
+	      .then(data => {
+	          append("RELLAbot", data.reply, data.options || []);
+	      })
+	      .catch(err => {
+	          console.error("Error:", err);
+	          append("RELLAbot", "Oops, something went wrong. Please try again.");
+	      });
+	  }
+
 
       function append(sender, text, options = []) {
           const div = document.createElement("div");
