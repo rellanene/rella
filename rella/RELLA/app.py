@@ -623,11 +623,15 @@ def export_movements_csv():
             m.*,
             p.name AS product_name,
             u.username AS user_name,
-            s.invoice_no
+            s.invoice_no,
+            fs.name AS from_store_name,
+            ts.name AS to_store_name
         FROM movements m
         LEFT JOIN products p ON m.product_id = p.id
         LEFT JOIN users u ON m.created_by = u.id
         LEFT JOIN sales s ON m.invoice_id = s.id
+        LEFT JOIN stores fs ON m.from_store = fs.id
+        LEFT JOIN stores ts ON m.to_store = ts.id
         WHERE 1=1
     """
     params = []
@@ -659,20 +663,20 @@ def export_movements_csv():
             r['product_name'],
             r['movement_type'],
             r['qty'],
-            r['from_store'],
-            r['to_store'],
+            r['from_store_name'] if r['from_store_name'] else '',
+            r['to_store_name'] if r['to_store_name'] else '',
             r['invoice_no'] if r['invoice_no'] else ''
         ])
 
     log_action(user['id'], 'export_movements_csv', 'Exported movements CSV')
 
-    # ⭐ Timestamp filename
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     filename = f"movements_{timestamp}.csv"
 
     resp = Response(output.getvalue(), mimetype='text/csv')
     resp.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return resp
+
 
 def safe_cursor(db, dict=False):
     try:
@@ -7010,6 +7014,14 @@ def rellabot_query():
         if not has_permission("view_movements"):
             reply = "You don't have permission to view movement information."
         else:
+            reply = "Movements module accessed. What would you like to view?"
+            options = ["Today's Summary", "Recent Movements", "Back to Main Menu"]
+            session["last_topic"] = "movements"
+    
+    elif ("today" in user_message or "summary" in user_message) and last_topic == "movements":
+        if not has_permission("view_movements"):
+            reply = "You don't have permission to view movement information."
+        else:
             result = bot_safe_query(
                 "stock_movements",
                 """
@@ -7023,22 +7035,113 @@ def rellabot_query():
                 WHERE DATE(created_at)=CURDATE()
                 """
             )
-
+    
             if isinstance(result, str):
                 reply = result
             else:
                 m = result[0]
                 reply = (
-                    f"Today's Movements:<br>"
+                    f"Today's Movements Summary:<br>"
                     f"Transfers: {m['transfers']}<br>"
                     f"Sales: {m['sales']}<br>"
                     f"Stock In: {m['stock_in']}<br>"
                     f"Removed: {m['removed']}<br>"
                     f"Adjusted: {m['adjusted']}"
                 )
+    
+            options = ["Recent Movements", "Back to Main Menu"]
+            session["last_topic"] = "movements_today"
+    
+    elif ("recent" in user_message or "movement" in user_message or "movements" in user_message) and last_topic == "movements":
+        if not has_permission("view_movements"):
+            reply = "You don't have permission to view movement information."
+        else:
+            result = bot_safe_query(
+                "stock_movements",
+                """
+                SELECT type, reference_no, created_at
+                FROM stock_movements
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([
+                    f"{r['type'].capitalize()} — Ref: {r['reference_no']} — {r['created_at']}"
+                    for r in result
+                ])
+    
+            options = ["Today's Summary", "Back to Main Menu"]
+            session["last_topic"] = "movements_recent"
+            
+#CREDITS
+    elif "credit" in user_message or "credits" in user_message:
+        if not has_permission("view_credits"):
+            reply = "You don't have permission to view credit information."
+        else:
+            reply = "Credits module accessed. What would you like to view?"
+            options = ["Today's Summary", "Recent Credits", "Back to Main Menu"]
+            session["last_topic"] = "credits"
+    
+    elif ("today" in user_message or "summary" in user_message) and last_topic == "credits":
+        if not has_permission("view_credits"):
+            reply = "You don't have permission to view credit information."
+        else:
+            result = bot_safe_query(
+                "credits",
+                """
+                SELECT COUNT(id) AS total_credits,
+                       SUM(amount) AS total_amount,
+                       SUM(balance) AS total_balance
+                FROM credits
+                WHERE DATE(created_at) = CURDATE()
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                c = result[0]
+                reply = (
+                    f"Today's Credit Summary:<br>"
+                    f"Total Credits: {c['total_credits']}<br>"
+                    f"Total Amount: R{c['total_amount']:.2f}<br>"
+                    f"Outstanding Balance: R{c['total_balance']:.2f}"
+                )
+    
+            options = ["Recent Credits", "Back to Main Menu"]
+            session["last_topic"] = "credits_today"
+    
+    elif ("recent" in user_message) and last_topic == "credits":
+        if not has_permission("view_credits"):
+            reply = "You don't have permission to view credit information."
+        else:
+            result = bot_safe_query(
+                "credits",
+                """
+                SELECT reference_no, client_name, amount, balance, created_at
+                FROM credits
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<br>".join([
+                    f"Ref {r['reference_no']} — {r['client_name']} — Amount: R{r['amount']:.2f} — "
+                    f"Balance: R{r['balance']:.2f} — {r['created_at']}"
+                    for r in result
+                ])
+    
+            options = ["Today's Summary", "Back to Main Menu"]
+            session["last_topic"] = "credits_recent"
+               
 
-            options = ["Back to Main Menu"]
-            session["last_topic"] = "movements"
 
     # -------------------------
     # DEFAULT FALLBACK
