@@ -6931,40 +6931,43 @@ def rellabot_query():
     # -------------------------
     # 4. CLIENTS
     # -------------------------
-    elif "client" in user_message or "clients" in user_message:
+    elif ("client" in user_message or "clients" in user_message) and \
+         "list" not in user_message and "all" not in user_message:
         if not has_permission("view_clients"):
             reply = "You don't have permission to view client information."
         else:
             reply = "Clients module accessed. What would you like to do?"
-            options = ["List Clients", "Search Client by ID", "Back to Main Menu"]
+            options = ["List Clients", "Back to Main Menu"]
             session["last_topic"] = "clients"
-
-    elif "list" in user_message and last_topic == "clients":
+    
+    
+    elif ("list" in user_message or "all" in user_message) and \
+         last_topic in ["clients", "clients_list"]:
         if not has_permission("view_clients"):
             reply = "You don't have permission to view client information."
         else:
-            result = bot_safe_query("clients", "SELECT id, name, phone FROM clients LIMIT 10")
+            # ⭐ Correct schema: rella.clients
+            result = bot_safe_query(
+                "clients",
+                """
+                SELECT id, name, phone, created_at
+                FROM rella.clients
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
+    
             if isinstance(result, str):
                 reply = result
             else:
-                reply = "<br>".join([f"{r['id']}. {r['name']} — {r['phone']}" for r in result])
-            options = ["Search Client by ID", "Back to Main Menu"]
+                reply = "<b>Recent Clients:</b><br>" + "<br>".join([
+                    f"{r['id']} — {r['name']} — {r['phone']} — {r['created_at']}"
+                    for r in result
+                ])
+    
+            options = ["Back to Main Menu"]
             session["last_topic"] = "clients_list"
 
-    # -------------------------
-    # 5. STORES
-    # -------------------------
-    elif "store" in user_message or "stores" in user_message:
-        if not has_permission("view_stores"):
-            reply = "You don't have permission to view store information."
-        else:
-            result = bot_safe_query("stores", "SELECT COUNT(id) AS total_stores FROM stores")
-            if isinstance(result, str):
-                reply = result
-            else:
-                reply = f"You have {result[0]['total_stores']} store(s) registered."
-            options = ["Check Stock Levels", "Back to Main Menu"]
-            session["last_topic"] = "stores"
 
     # -------------------------
     # 5B. STOCK LEVELS (CORRECTED)
@@ -7064,116 +7067,149 @@ def rellabot_query():
 
 
     # -------------------------
-    # 7. TRANSFERS
+    # TRANSFERS
     # -------------------------
-    elif "transfer" in user_message or "transfers" in user_message:
-    
-        # Permission check (same pattern as Products)
-        if not has_permission("view_transfers"):
+    elif ("transfer" in user_message or "transfers" in user_message) and \
+         "today" not in user_message and "summary" not in user_message and "recent" not in user_message:
+        if not has_permission("view_movements"):  # ✅ updated permission
             reply = "You don't have permission to view transfer information."
-    
         else:
+            reply = "Transfers module accessed. What would you like to view?"
+            options = ["Today's Transfers Summary", "Recent Transfers", "Back to Main Menu"]
+            session["last_topic"] = "transfers"
     
-            # ⭐ DIRECT: "today transfers"
-            if "today" in user_message or "summary" in user_message:
     
-                # 1) Daily totals
-                totals = bot_safe_query(
-                    "movements",
-                    """
-                    SELECT 
-                        COUNT(id) AS total_transfers,
-                        COALESCE(SUM(qty), 0) AS total_qty
-                    FROM rella.movements
-                    WHERE movement_type = 'transfer'
-                      AND DATE(created_at) = CURDATE()
-                    """
-                )
+    elif ("today" in user_message or "summary" in user_message) and \
+         last_topic in ["transfers", "transfers_recent", "transfers_today"]:
+        if not has_permission("view_movements"):  # ✅ updated permission
+            reply = "You don't have permission to view transfer information."
+        else:
+            # Daily totals
+            totals = bot_safe_query(
+                "movements",
+                """
+                SELECT 
+                    COUNT(id) AS total_transfers,
+                    COALESCE(SUM(qty), 0) AS total_qty
+                FROM rella.movements
+                WHERE movement_type = 'transfer'
+                  AND DATE(created_at) = CURDATE()
+                """
+            )
     
-                # 2) Store-to-store breakdown
-                breakdown = bot_safe_query(
-                    "movements",
-                    """
-                    SELECT 
-                        from_store,
-                        to_store,
-                        COALESCE(SUM(qty), 0) AS total_qty
-                    FROM rella.movements
-                    WHERE movement_type = 'transfer'
-                      AND DATE(created_at) = CURDATE()
-                    GROUP BY from_store, to_store
-                    ORDER BY from_store, to_store
-                    """
-                )
+            # Store-to-store breakdown
+            breakdown = bot_safe_query(
+                "movements",
+                """
+                SELECT 
+                    from_store,
+                    to_store,
+                    COALESCE(SUM(qty), 0) AS total_qty
+                FROM rella.movements
+                WHERE movement_type = 'transfer'
+                  AND DATE(created_at) = CURDATE()
+                GROUP BY from_store, to_store
+                ORDER BY from_store, to_store
+                """
+            )
     
-                # Build reply
-                if isinstance(totals, str) or not totals:
-                    reply = "No transfers recorded today."
-                else:
-                    t = totals[0]
-                    total_transfers = int(t.get("total_transfers", 0))
-                    total_qty = int(t.get("total_qty", 0))
-    
-                    if total_transfers == 0:
-                        reply = "No transfers recorded today."
-                    elif total_transfers == 1:
-                        reply = f"Today: 1 transfer recorded with {total_qty} item(s) moved."
-                    else:
-                        reply = (
-                            f"Today: {total_transfers} transfers recorded "
-                            f"with a total of {total_qty} item(s) moved."
-                        )
-    
-                # Breakdown section
-                if isinstance(breakdown, list) and breakdown:
-                    reply += "\n\nTransfer Breakdown:\n"
-                    for row in breakdown:
-                        fs = row.get("from_store", "Unknown")
-                        ts = row.get("to_store", "Unknown")
-                        qty = int(row.get("total_qty", 0))
-                        reply += f"- {fs} → {ts}: {qty} item(s)\n"
-                else:
-                    reply += "\n\nNo store-to-store transfer breakdown available today."
-    
-                options = ["Back to Main Menu"]
-                session["last_topic"] = "transfer_summary"
-    
-            # ⭐ DEFAULT ENTRY (same pattern as Products)
+            # Build reply
+            if isinstance(totals, str) or not totals:
+                reply = "No transfers recorded today."
             else:
-                reply = "Transfers module accessed. What would you like to do?"
-                options = ["Today's Transfers Summary", "Back to Main Menu"]
-                session["last_topic"] = "transfer"
+                t = totals[0]
+                total_transfers = int(t.get("total_transfers", 0))
+                total_qty = int(t.get("total_qty", 0))
+    
+                if total_transfers == 0:
+                    reply = "No transfers recorded today."
+                elif total_transfers == 1:
+                    reply = f"Today: 1 transfer recorded with {total_qty} item(s) moved."
+                else:
+                    reply = (
+                        f"Today: {total_transfers} transfers recorded "
+                        f"with a total of {total_qty} item(s) moved."
+                    )
+    
+            # Breakdown section
+            if isinstance(breakdown, list) and breakdown:
+                reply += "<br><br><b>Transfer Breakdown:</b><br>"
+                for row in breakdown:
+                    fs = row.get("from_store", "Unknown")
+                    ts = row.get("to_store", "Unknown")
+                    qty = int(row.get("total_qty", 0))
+                    reply += f"{fs} → {ts}: {qty} item(s)<br>"
+            else:
+                reply += "<br><br>No store-to-store transfer breakdown available today."
+    
+            options = ["Recent Transfers", "Back to Main Menu"]
+            session["last_topic"] = "transfers_today"
+    
+    
+    elif ("recent" in user_message or "transfer" in user_message or "transfers" in user_message) and \
+         last_topic in ["transfers", "transfers_today"]:
+        if not has_permission("view_movements"):  # ✅ updated permission
+            reply = "You don't have permission to view transfer information."
+        else:
+            # Recent transfers
+            result = bot_safe_query(
+                "movements",
+                """
+                SELECT id, qty, from_store, to_store, created_at
+                FROM rella.movements
+                WHERE movement_type = 'transfer'
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = "<b>Recent Transfers:</b><br>" + "<br>".join([
+                    f"Transfer #{r['id']} — Qty: {r['qty']} — "
+                    f"From: {r['from_store']} → To: {r['to_store']} — {r['created_at']}"
+                    for r in result
+                ])
+    
+            options = ["Today's Transfers Summary", "Back to Main Menu"]
+            session["last_topic"] = "transfers_recent"
+
 
 
 
 
 
     # -------------------------
-    # 8. MOVEMENTS
+    # MOVEMENTS
     # -------------------------
-    elif "movement" in user_message or "movements" in user_message:
-        if not has_permission("view_movements"):
+    elif ("movement" in user_message or "movements" in user_message) and \
+         "today" not in user_message and "summary" not in user_message and "recent" not in user_message:
+        if not has_permission("view_movements"):  # ✅ correct permission
             reply = "You don't have permission to view movement information."
         else:
             reply = "Movements module accessed. What would you like to view?"
             options = ["Today's Summary", "Recent Movements", "Back to Main Menu"]
             session["last_topic"] = "movements"
     
-    elif ("today" in user_message or "summary" in user_message) and last_topic == "movements":
+    
+    elif ("today" in user_message or "summary" in user_message) and \
+         last_topic in ["movements", "movements_recent", "movements_today"]:
         if not has_permission("view_movements"):
             reply = "You don't have permission to view movement information."
         else:
+            # ✅ Updated to match your table structure
             result = bot_safe_query(
-                "stock_movements",
+                "movements",
                 """
                 SELECT 
-                    SUM(CASE WHEN type='transfer' THEN 1 ELSE 0 END) AS transfers,
-                    SUM(CASE WHEN type='sale' THEN 1 ELSE 0 END) AS sales,
-                    SUM(CASE WHEN type='stock_in' THEN 1 ELSE 0 END) AS stock_in,
-                    SUM(CASE WHEN type='remove' THEN 1 ELSE 0 END) AS removed,
-                    SUM(CASE WHEN type='adjustment' THEN 1 ELSE 0 END) AS adjusted
-                FROM stock_movements
-                WHERE DATE(created_at)=CURDATE()
+                    SUM(CASE WHEN movement_type='transfer' THEN 1 ELSE 0 END) AS transfers,
+                    SUM(CASE WHEN movement_type='sale' THEN 1 ELSE 0 END) AS sales,
+                    SUM(CASE WHEN movement_type='stock_in' THEN 1 ELSE 0 END) AS stock_in,
+                    SUM(CASE WHEN movement_type='return' THEN 1 ELSE 0 END) AS returns,
+                    SUM(CASE WHEN movement_type='adjustment' THEN 1 ELSE 0 END) AS adjustments
+                FROM rella.movements
+                WHERE DATE(created_at) = CURDATE()
                 """
             )
     
@@ -7186,22 +7222,25 @@ def rellabot_query():
                     f"Transfers: {m['transfers']}<br>"
                     f"Sales: {m['sales']}<br>"
                     f"Stock In: {m['stock_in']}<br>"
-                    f"Removed: {m['removed']}<br>"
-                    f"Adjusted: {m['adjusted']}"
+                    f"Returns: {m['returns']}<br>"
+                    f"Adjustments: {m['adjustments']}"
                 )
     
             options = ["Recent Movements", "Back to Main Menu"]
             session["last_topic"] = "movements_today"
     
-    elif ("recent" in user_message or "movement" in user_message or "movements" in user_message) and last_topic == "movements":
+    
+    elif ("recent" in user_message or "movement" in user_message or "movements" in user_message) and \
+         last_topic in ["movements", "movements_today"]:
         if not has_permission("view_movements"):
             reply = "You don't have permission to view movement information."
         else:
+            # ✅ Updated to match your table structure
             result = bot_safe_query(
-                "stock_movements",
+                "movements",
                 """
-                SELECT type, reference_no, created_at
-                FROM stock_movements
+                SELECT movement_type, qty, from_store, to_store, created_at
+                FROM rella.movements
                 ORDER BY created_at DESC
                 LIMIT 10
                 """
@@ -7210,35 +7249,208 @@ def rellabot_query():
             if isinstance(result, str):
                 reply = result
             else:
-                reply = "<br>".join([
-                    f"{r['type'].capitalize()} — Ref: {r['reference_no']} — {r['created_at']}"
+                reply = "<b>Recent Movements:</b><br>" + "<br>".join([
+                    f"{r['movement_type'].capitalize()} — Qty: {r['qty']} — "
+                    f"From: {r['from_store']} → To: {r['to_store']} — {r['created_at']}"
                     for r in result
                 ])
     
             options = ["Today's Summary", "Back to Main Menu"]
             session["last_topic"] = "movements_recent"
+
+
+    # -------------------------
+    # TASKS
+    # -------------------------
+    elif ("task" in user_message or "tasks" in user_message) and \
+         "today" not in user_message and "opened" not in user_message and "pending" not in user_message:
+        if not has_permission("view_clients"):  # reuse view_clients permission
+            reply = "You don't have permission to view tasks."
+        else:
+            reply = "Tasks module accessed. What would you like to view?"
+            options = ["Today's Opened Tasks", "All Pending Tasks", "Back to Main Menu"]
+            session["last_topic"] = "tasks"
+    
+    
+    elif ("today" in user_message or "opened" in user_message) and \
+         last_topic in ["tasks", "tasks_today", "tasks_pending"]:
+        if not has_permission("view_clients"):
+            reply = "You don't have permission to view tasks."
+        else:
+            # Show tasks created today and still open
+            result = bot_safe_query(
+                "clients",
+                """
+                SELECT 
+                    COUNT(id) AS total_tasks,
+                    COALESCE(SUM(progress), 0) AS total_progress
+                FROM rella.tasks
+                WHERE DATE(created_at) = CURDATE()
+                  AND status = 'open'
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                r = result[0]
+                reply = (
+                    f"Today's Opened Tasks:<br>"
+                    f"Total Tasks Opened Today: {r['total_tasks']}<br>"
+                    f"Combined Progress: {r['total_progress']}%"
+                )
+    
+            options = ["All Pending Tasks", "Back to Main Menu"]
+            session["last_topic"] = "tasks_today"
+    
+    
+    elif ("pending" in user_message or "inprogress" in user_message or "in progress" in user_message) and \
+         last_topic in ["tasks", "tasks_today"]:
+        if not has_permission("view_clients"):
+            reply = "You don't have permission to view tasks."
+        else:
+            # Show all tasks that are open or in progress
+            result = bot_safe_query(
+                "clients",
+                """
+                SELECT 
+                    id,
+                    task_no,
+                    title,
+                    status,
+                    priority,
+                    deadline,
+                    progress
+                FROM rella.tasks
+                WHERE status IN ('open', 'in_progress')
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                task_list = "<br>".join([
+                    f"#{r['task_no']} — {r['title']} — Status: {r['status']} — "
+                    f"Priority: {r['priority']} — Progress: {r['progress']}% — Deadline: {r['deadline']}"
+                    for r in result
+                ])
+    
+                reply = f"<b>All Pending Tasks:</b><br>{task_list}"
+    
+            options = ["Today's Opened Tasks", "Back to Main Menu"]
+            session["last_topic"] = "tasks_pending"
             
-#CREDITS
+            
+            
+    # -------------------------
+    # LAY-BUYS
+    # -------------------------
+    elif ("lay" in user_message and ("buy" in user_message or "buys" in user_message or "lay-buys" in user_message)) and "today" not in user_message and "active" not in user_message:
+        if not has_permission("view_clients"):  # reuse view_clients permission
+            reply = "You don't have permission to view lay-buy information."
+        else:
+            reply = "Lay-Buys module accessed. What would you like to view?"
+            options = ["Today's Lay-Buys", "Active Lay-Buys", "Back to Main Menu"]
+            session["last_topic"] = "laybuys"
+    
+    
+    elif ("today" in user_message or "summary" in user_message) and last_topic == "laybuys":
+        if not has_permission("view_clients"):
+            reply = "You don't have permission to view lay-buy information."
+        else:
+            result = bot_safe_query(
+                "clients",
+                """
+                SELECT 
+                    COUNT(id) AS total_laybuys,
+                    COALESCE(SUM(total_amount), 0) AS total_value,
+                    COALESCE(SUM(paid_amount), 0) AS total_paid
+                FROM rella.client_laybuys
+                WHERE DATE(created_at) = CURDATE()
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                r = result[0]
+                reply = (
+                    f"Today's Lay-Buys Summary:<br>"
+                    f"Total Lay-Buys Created Today: {r['total_laybuys']}<br>"
+                    f"Total Value: R{r['total_value']:.2f}<br>"
+                    f"Total Paid: R{r['total_paid']:.2f}"
+                )
+    
+            options = ["Active Lay-Buys", "Back to Main Menu"]
+            session["last_topic"] = "laybuys_today"
+    
+    
+    elif "active" in user_message and "lay" in user_message and last_topic in ["laybuys", "laybuys_today"]:
+        if not has_permission("view_clients"):
+            reply = "You don't have permission to view lay-buy information."
+        else:
+            result = bot_safe_query(
+                "clients",
+                """
+                SELECT 
+                    lb.id,
+                    lb.client_id,
+                    c.name AS client_name,
+                    lb.total_amount,
+                    lb.paid_amount,
+                    lb.start_date,
+                    lb.expiry_date,
+                    lb.laybuy_number
+                FROM rella.client_laybuys lb
+                LEFT JOIN rella.clients c ON lb.client_id = c.id
+                WHERE lb.status = 'active'
+                ORDER BY lb.created_at DESC
+                LIMIT 10
+                """
+            )
+    
+            if isinstance(result, str):
+                reply = result
+            else:
+                laybuy_list = "<br>".join([
+                    f"{r['client_name']} — Lay-Buy #{r['laybuy_number']} — "
+                    f"Total: R{r['total_amount']:.2f} — Paid: R{r['paid_amount']:.2f} — "
+                    f"Start: {r['start_date']} — Expiry: {r['expiry_date']}"
+                    for r in result
+                ])
+    
+                reply = f"<b>Active Lay-Buys:</b><br>{laybuy_list}"
+    
+            options = ["Today's Lay-Buys", "Back to Main Menu"]
+            session["last_topic"] = "laybuys_active"
+            
+            
+    # -------------------------
+    # CREDITS
+    # -------------------------
     elif "credit" in user_message or "credits" in user_message:
-        if not has_permission("view_credits"):
+        if not has_permission("view_clients"):
             reply = "You don't have permission to view credit information."
         else:
             reply = "Credits module accessed. What would you like to view?"
-            options = ["Today's Summary", "Recent Credits", "Back to Main Menu"]
+            options = ["Today's Summary", "Back to Main Menu"]
             session["last_topic"] = "credits"
     
+    
     elif ("today" in user_message or "summary" in user_message) and last_topic == "credits":
-        if not has_permission("view_credits"):
+        if not has_permission("view_clients"):
             reply = "You don't have permission to view credit information."
         else:
+            # Only show total clients and current balance from client_credits
             result = bot_safe_query(
-                "credits",
+                "clients",
                 """
-                SELECT COUNT(id) AS total_credits,
-                       SUM(amount) AS total_amount,
-                       SUM(balance) AS total_balance
-                FROM credits
-                WHERE DATE(created_at) = CURDATE()
+                SELECT 
+                    COUNT(id) AS total_credits,
+                    COALESCE(SUM(current_balance), 0) AS total_balance
+                FROM rella.client_credits
                 """
             )
     
@@ -7248,39 +7460,14 @@ def rellabot_query():
                 c = result[0]
                 reply = (
                     f"Today's Credit Summary:<br>"
-                    f"Total Credits: {c['total_credits']}<br>"
-                    f"Total Amount: R{c['total_amount']:.2f}<br>"
-                    f"Outstanding Balance: R{c['total_balance']:.2f}"
+                    f"Total Clients with Credit: {c['total_credits']}<br>"
+                    f"Current Balance (All Clients): R{c['total_balance']:.2f}"
                 )
     
-            options = ["Recent Credits", "Back to Main Menu"]
+            options = ["Back to Main Menu"]
             session["last_topic"] = "credits_today"
-    
-    elif ("recent" in user_message) and last_topic == "credits":
-        if not has_permission("view_credits"):
-            reply = "You don't have permission to view credit information."
-        else:
-            result = bot_safe_query(
-                "credits",
-                """
-                SELECT reference_no, client_name, amount, balance, created_at
-                FROM credits
-                ORDER BY created_at DESC
-                LIMIT 10
-                """
-            )
-    
-            if isinstance(result, str):
-                reply = result
-            else:
-                reply = "<br>".join([
-                    f"Ref {r['reference_no']} — {r['client_name']} — Amount: R{r['amount']:.2f} — "
-                    f"Balance: R{r['balance']:.2f} — {r['created_at']}"
-                    for r in result
-                ])
-    
-            options = ["Today's Summary", "Back to Main Menu"]
-            session["last_topic"] = "credits_recent"
+
+
                
 
 
