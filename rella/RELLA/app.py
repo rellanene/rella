@@ -6756,7 +6756,8 @@ def rellabot_query():
     # -------------------------
     # 2. SALES
     # -------------------------
-    elif "sales" in user_message:
+    elif ("sales" in user_message) and \
+         "today" not in user_message and "summary" not in user_message and "recent" not in user_message and "transactions" not in user_message:
         if not has_permission("view_sales"):
             reply = "You don't have permission to view sales information."
         else:
@@ -6764,7 +6765,9 @@ def rellabot_query():
             options = ["Today's Summary", "Recent Transactions", "Back to Main Menu"]
             session["last_topic"] = "sales"
     
-    elif ("today" in user_message or "today's summary" in user_message) and last_topic == "sales":
+    
+    elif ("today" in user_message or "summary" in user_message) and \
+         last_topic in ["sales", "sales_recent", "sales_today"]:
         if not has_permission("view_sales"):
             reply = "You don't have permission to view sales information."
         else:
@@ -6776,10 +6779,11 @@ def rellabot_query():
                     COALESCE(SUM(subtotal), 0) AS total_subtotal,
                     COALESCE(SUM(vat), 0) AS total_vat,
                     COALESCE(SUM(total), 0) AS total_sales
-                FROM sales
+                FROM rella.sales
                 WHERE DATE(created_at) = CURDATE()
                 """
             )
+    
             if isinstance(result, str):
                 reply = result
             else:
@@ -6791,28 +6795,23 @@ def rellabot_query():
                     f"VAT: R{(s['total_vat'] or 0):.2f}<br>"
                     f"Total Sales: R{(s['total_sales'] or 0):.2f}"
                 )
+    
             options = ["Recent Transactions", "Back to Main Menu"]
             session["last_topic"] = "sales_today"
+    
     
     elif (
         (
             "recent" in user_message or
-            "recent transactions" in user_message or
-            "show recent" in user_message or
-            "view recent" in user_message or
-            "last 10" in user_message or
-            "last ten" in user_message or
-            "view last" in user_message or
-            "show last" in user_message or
-            "latest sales" in user_message or
-            "latest transactions" in user_message or
-            "view last 10 invoices" in user_message or
-            "show last 10 invoices" in user_message or
             "transactions" in user_message or
+            "recent transactions" in user_message or
+            "latest" in user_message or
             "sales history" in user_message or
-            "past sales" in user_message
+            "past sales" in user_message or
+            "last 10" in user_message or
+            "last ten" in user_message
         )
-        and last_topic == "sales"
+        and last_topic in ["sales", "sales_today"]
     ):
         if not has_permission("view_sales"):
             reply = "You don't have permission to view sales information."
@@ -6821,109 +6820,140 @@ def rellabot_query():
                 "sales",
                 """
                 SELECT invoice_no, total, vat, created_at
-                FROM sales
+                FROM rella.sales
                 ORDER BY created_at DESC
                 LIMIT 10
                 """
             )
+    
             if isinstance(result, str):
                 reply = result
             else:
                 if not result:
                     reply = "No recent transactions found."
                 else:
-                    reply = "<br>".join([
+                    reply = "<b>Recent Transactions:</b><br>" + "<br>".join([
                         f"Invoice {r['invoice_no']} — Total: R{(r['total'] or 0):.2f} "
                         f"(VAT: R{(r['vat'] or 0):.2f}) — {r['created_at']}"
                         for r in result
                     ])
+    
             options = ["Today's Summary", "Back to Main Menu"]
             session["last_topic"] = "sales_recent"
+
 
 
     # -------------------------
     # 3. PRODUCTS
     # -------------------------
-    elif "product" in user_message or "products" in user_message:
-    
+    elif ("product" in user_message or "products" in user_message) and \
+         "list" not in user_message and "search" not in user_message:
         if not has_permission("view_products"):
             reply = "You don't have permission to view product information."
-    
         else:
-            # ⭐ DIRECT: "list products"
-            if "list" in user_message:
-                result = bot_safe_query("products", "SELECT id, name, retail_price FROM rella.products LIMIT 10")
-                if isinstance(result, str):
-                    reply = result
-                else:
-                    reply = "<br>".join([
-                        f"{r['id']}. {r['name']} — R{r['retail_price']:.2f}"
-                        for r in result
-                    ])
-                options = ["Search Product by Name", "Search Product by Barcode", "Back to Main Menu"]
-                session["last_topic"] = "products_list"
+            reply = "Products module accessed. What would you like to do?"
+            options = ["List Products", "Search Product by Name", "Search Product by Barcode", "Back to Main Menu"]
+            session["last_topic"] = "products"
     
-            # ⭐ DIRECT: "search product by name"
-            elif "search" in user_message and "name" in user_message:
-                reply = "Please enter the product name you want to search."
-                options = ["Back to Main Menu"]
-                session["last_topic"] = "product_search_name"
     
-            # ⭐ DIRECT: "search product by barcode"
-            elif "search" in user_message and "barcode" in user_message:
-                reply = "Please enter the product barcode you want to search."
-                options = ["Back to Main Menu"]
-                session["last_topic"] = "product_search_barcode"
+    # ⭐ LIST PRODUCTS
+    elif ("list" in user_message) and last_topic in ["products", "products_list"]:
+        if not has_permission("view_products"):
+            reply = "You don't have permission to view product information."
+        else:
+            result = bot_safe_query(
+                "products",
+                """
+                SELECT id, name, retail_price
+                FROM rella.products
+                ORDER BY created_at DESC
+                LIMIT 10
+                """
+            )
     
-            # ⭐ SEARCH BY NAME (text input)
-            elif last_topic in ["product_search_name", "products"]:
-                pname = user_message.strip()
-                if pname:
-                    result = bot_safe_query(
-                        "products",
-                        f"SELECT id, name, retail_price FROM rella.products WHERE name LIKE '%{pname}%'"
-                    )
-                    if isinstance(result, str) or not result:
-                        reply = f"No product found matching '{pname}'."
-                    else:
-                        reply = "<br>".join([
-                            f"{r['id']}. {r['name']} — R{r['retail_price']:.2f}"
-                            for r in result
-                        ])
-                    options = ["List Products", "Search Product by Barcode", "Back to Main Menu"]
-                    session["last_topic"] = "products"
-                else:
-                    reply = "Please enter a valid product name."
-                    options = ["Back to Main Menu"]
-                    session["last_topic"] = "product_search_name"
-    
-            # ⭐ SEARCH BY BARCODE (numeric input)
-            elif last_topic == "product_search_barcode":
-                barcode = user_message.strip()
-                if barcode:
-                    result = bot_safe_query(
-                        "products",
-                        f"SELECT id, name, retail_price FROM rella.products WHERE barcode LIKE '%{barcode}%'"
-                    )
-                    if isinstance(result, str) or not result:
-                        reply = f"No product found with barcode '{barcode}'."
-                    else:
-                        reply = "<br>".join([
-                            f"{r['id']}. {r['name']} — R{r['retail_price']:.2f}"
-                            for r in result
-                        ])
-                    options = ["List Products", "Search Product by Name", "Back to Main Menu"]
-                    session["last_topic"] = "products"
-                else:
-                    reply = "Please enter a valid barcode."
-                    options = ["Back to Main Menu"]
-                    session["last_topic"] = "product_search_barcode"
-    
-            # ⭐ DEFAULT ENTRY
+            if isinstance(result, str):
+                reply = result
             else:
-                reply = "Products module accessed. What would you like to do?"
-                options = ["List Products", "Search Product by Name", "Search Product by Barcode", "Back to Main Menu"]
-                session["last_topic"] = "products"
+                reply = "<b>Recent Products:</b><br>" + "<br>".join([
+                    f"{r['id']}. {r['name']} — R{r['retail_price']:.2f}"
+                    for r in result
+                ])
+    
+            options = ["Search Product by Name", "Search Product by Barcode", "Back to Main Menu"]
+            session["last_topic"] = "products_list"
+    
+    
+    # ⭐ SEARCH PRODUCT BY NAME (prompt)
+    elif ("search" in user_message and "name" in user_message) and last_topic == "products":
+        reply = "Please enter the product name you want to search."
+        options = ["Back to Main Menu"]
+        session["last_topic"] = "product_search_name"
+    
+    
+    # ⭐ SEARCH PRODUCT BY BARCODE (prompt)
+    elif ("search" in user_message and "barcode" in user_message) and last_topic == "products":
+        reply = "Please enter the product barcode you want to search."
+        options = ["Back to Main Menu"]
+        session["last_topic"] = "product_search_barcode"
+    
+    
+    # ⭐ SEARCH BY NAME (actual text input)
+    elif last_topic == "product_search_name":
+        pname = user_message.strip()
+        if pname:
+            result = bot_safe_query(
+                "products",
+                f"""
+                SELECT id, name, retail_price
+                FROM rella.products
+                WHERE name LIKE '%{pname}%'
+                """
+            )
+    
+            if isinstance(result, str) or not result:
+                reply = f"No product found matching '{pname}'."
+            else:
+                reply = "<b>Search Results:</b><br>" + "<br>".join([
+                    f"{r['id']}. {r['name']} — R{r['retail_price']:.2f}"
+                    for r in result
+                ])
+    
+            options = ["List Products", "Search Product by Barcode", "Back to Main Menu"]
+            session["last_topic"] = "products"
+        else:
+            reply = "Please enter a valid product name."
+            options = ["Back to Main Menu"]
+            session["last_topic"] = "product_search_name"
+    
+    
+    # ⭐ SEARCH BY BARCODE (actual text input)
+    elif last_topic == "product_search_barcode":
+        barcode = user_message.strip()
+        if barcode:
+            result = bot_safe_query(
+                "products",
+                f"""
+                SELECT id, name, retail_price
+                FROM rella.products
+                WHERE barcode LIKE '%{barcode}%'
+                """
+            )
+    
+            if isinstance(result, str) or not result:
+                reply = f"No product found with barcode '{barcode}'."
+            else:
+                reply = "<b>Search Results:</b><br>" + "<br>".join([
+                    f"{r['id']}. {r['name']} — R{r['retail_price']:.2f}"
+                    for r in result
+                ])
+    
+            options = ["List Products", "Search Product by Name", "Back to Main Menu"]
+            session["last_topic"] = "products"
+        else:
+            reply = "Please enter a valid barcode."
+            options = ["Back to Main Menu"]
+            session["last_topic"] = "product_search_barcode"
+
 
 
 
@@ -6968,7 +6998,20 @@ def rellabot_query():
             options = ["Back to Main Menu"]
             session["last_topic"] = "clients_list"
 
-
+    # -------------------------
+    # 5. STORES
+    # -------------------------
+    elif "store" in user_message or "stores" in user_message:
+        if not has_permission("view_stores"):
+            reply = "You don't have permission to view store information."
+        else:
+            result = bot_safe_query("stores", "SELECT COUNT(id) AS total_stores FROM stores")
+            if isinstance(result, str):
+                reply = result
+            else:
+                reply = f"You have {result[0]['total_stores']} store(s) registered."
+            options = ["Check Stock Levels", "Back to Main Menu"]
+            session["last_topic"] = "stores"
     # -------------------------
     # 5B. STOCK LEVELS (CORRECTED)
     # -------------------------
