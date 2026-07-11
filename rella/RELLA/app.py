@@ -17,6 +17,8 @@ import pdfkit
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+import urllib.parse
+
 
 
 
@@ -488,25 +490,133 @@ def invoice_view(sale_id):
 
     return render_template("invoice.html", sale=sale, items=items, user=user)
 
+def build_invoice_text(sale, items):
+    lines = []
+    lines.append(f"INVOICE {sale['invoice_no']}")
+    lines.append(f"Date: {sale['created_at']}")
+    lines.append(f"Cashier: {sale['user_name']}")
+    lines.append(f"Store: {sale['store_name']}")
+    lines.append("")
+    lines.append("Customer:")
+    lines.append(f"{sale['client_name']}")
+    lines.append("")
+    lines.append("Items:")
+    for item in items:
+        lines.append(
+            f"- {item['product_name']} x{item['qty']} @ R{item['price']:.2f} = R{item['total']:.2f}"
+        )
+    lines.append("")
+    lines.append(f"Subtotal: R{sale['subtotal']:.2f}")
+    lines.append(f"VAT: R{sale['vat']:.2f}")
+    lines.append(f"Total: R{sale['total']:.2f}")
+    lines.append("")
+    lines.append("Thank you for your business!")
 
-@app.route("/invoice_whatsapp/<int:sale_id>")
-def invoice_whatsapp(sale_id):
-    pdf_path = generate_invoice_pdf(sale_id)
-    phone = get_customer_phone(sale_id)
+    return "\n".join(lines)
 
-    if not phone:
-        return "This customer has no phone number saved."
 
-    os.system(f'start whatsapp://send?phone={phone}')
 
+def fetch_sale(sale_id):
+    result = bot_safe_query(
+        "sales",
+        f"""
+        SELECT 
+            s.*, 
+            u.username AS user_name, 
+            st.name AS store_name, 
+            c.name AS client_name
+        FROM rella.sales s
+        LEFT JOIN rella.users u ON u.id = s.created_by
+        LEFT JOIN rella.stores st ON st.id = s.store_id
+        LEFT JOIN rella.clients c ON c.id = s.client_id
+        WHERE s.id = {sale_id}
+        """
+    )
+    return result[0] if result and not isinstance(result, str) else None
+
+
+def fetch_sale_items(sale_id):
+    result = bot_safe_query(
+        "sales",
+        f"""
+        SELECT 
+            si.quantity AS qty,
+            si.unit_price AS price,
+            si.total_price AS total,
+            p.name AS product_name
+        FROM rella.sale_items si
+        JOIN rella.products p ON p.id = si.product_id
+        WHERE si.sale_id = {sale_id}
+        """
+    )
+    return result if result and not isinstance(result, str) else []
+
+
+
+
+
+def fetch_customer_phone(sale_id):
+    result = bot_safe_query(
+        "sales",
+        f"""
+        SELECT c.phone
+        FROM rella.sales s
+        JOIN rella.clients c ON c.id = s.client_id
+        WHERE s.id = {sale_id}
+        """
+    )
+    if result and not isinstance(result, str):
+        return result[0]["phone"]
+    return None
+
+
+
+
+import pyperclip
+import os
+
+@app.route("/whatsapp_invoice/<int:sale_id>")
+@login_required
+def whatsapp_invoice(sale_id):
+    # Fetch sale + items using your existing functions
+    sale = fetch_sale(sale_id)
+    items = fetch_sale_items(sale_id)
+
+    if not sale:
+        return "Sale not found."
+
+    # Build invoice text (same as email)
+    message = build_invoice_text(sale, items)
+
+    # Copy invoice text to clipboard
+    pyperclip.copy(message)
+
+    # Open WhatsApp Desktop (compose window)
+    os.system('start "" "whatsapp://send"')
+
+    flash("Invoice copied — open WhatsApp and press Ctrl+V to paste.", "success")
     return redirect(f"/invoice/{sale_id}")
+
+
+
 
 
 @app.route("/invoice_email/<int:sale_id>")
 def invoice_email(sale_id):
-    # Simply open Classic Outlook — no attachment
-    os.system('start "" outlook.exe')
+    sale = fetch_sale(sale_id)
+    items = fetch_sale_items(sale_id)
+
+    if not sale:
+        return "Sale not found."
+
+    message = build_invoice_text(sale, items)
+    encoded = urllib.parse.quote(message)
+
+    os.system(f'start "" "mailto:?subject=Invoice%20{sale['invoice_no']}&body={encoded}"')
+
     return redirect(f"/invoice/{sale_id}")
+
+
 
 
 def get_customer_email(sale_id):

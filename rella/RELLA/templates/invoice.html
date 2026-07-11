@@ -261,19 +261,19 @@
 }
 
 </style>
-
 <script>
-function saveInvoice() {
-    window.print(); // Browser will allow "Save as PDF"
-}
-
 function sendWhatsapp(saleId) {
-    window.location.href = "/invoice_whatsapp/" + saleId;
+    window.location.href = "/whatsapp_invoice/" + saleId;
 }
 
 function sendEmail(saleId) {
     window.location.href = "/invoice_email/" + saleId;
 }
+
+function saveInvoice() {
+    window.print(); // Browser will allow "Save as PDF"
+}
 </script>
+
 
 {% endblock %}
